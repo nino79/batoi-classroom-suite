@@ -22,6 +22,8 @@ Domain and technical terms used throughout BCS documentation, in alphabetical or
 
 **GPT (GUID Partition Table)** — the partition table format required for UEFI boot, used instead of legacy MBR partitioning.
 
+**Host Inventory** — the immutable, versioned snapshot of a single machine's hardware/software facts (firmware, storage, network, identity, OS, CPU, memory, tooling), produced by `bcs inventory` and intended as the single source of truth consumed by `bcs doctor` and, eventually, Boot Manager, Builder, and Deploy. See [docs/HOST_INVENTORY.md](HOST_INVENTORY.md) and [ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md).
+
 **LliureX** — the Valencian public education system's Linux distribution, maintained by the Conselleria d'Educació, and the target guest OS for BCS (`PLAT-001`).
 
 **Maintenance Request** — the interface by which Boot Manager asks Deploy to (re-)image the requesting machine (`BM-006`/`DEP-006`). See [ARCHITECTURE.md §4](../ARCHITECTURE.md#4-component-boundaries).

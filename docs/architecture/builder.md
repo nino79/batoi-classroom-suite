@@ -1,6 +1,6 @@
 # Builder — Architecture
 
-See also: [docs/specifications/builder.md](../specifications/builder.md) for the normative requirements this design must satisfy, and [builder/README.md](../../builder/README.md) for the component's current status. Invoked by a technician via `bcs build` — see [docs/CLI.md](../CLI.md#bcs-build). Builder is an intended consumer of the [Host Inventory subsystem](../CLI.md#the-host-inventory-subsystem) (`bcs inventory`) — e.g. to confirm a build host meets `PLAT-005`/tooling prerequisites before starting a build.
+See also: [docs/specifications/builder.md](../specifications/builder.md) for the normative requirements this design must satisfy, and [builder/README.md](../../builder/README.md) for the component's current status. Invoked by a technician via `bcs build` — see [docs/CLI.md](../CLI.md#bcs-build). Builder is an intended consumer of the [Host Inventory subsystem](../HOST_INVENTORY.md) (`bcs inventory`) — e.g. to confirm a build host meets `PLAT-005`/tooling prerequisites before starting a build.
 
 ## Purpose
 

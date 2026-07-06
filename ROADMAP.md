@@ -19,6 +19,7 @@ Status legend: ✅ Done · 🚧 In progress · ⏳ Planned · 💤 Not started
 | Unified configuration format (`docs/CONFIGURATION.md`, `config/schema.yaml`) | ✅ |
 | `bcs` CLI design (`docs/CLI.md`) | ✅ |
 | `bcs` CLI framework implementation (`cli/`, Python — [ADR-0007](docs/decisions/0007-python-for-the-bcs-cli.md)) | ✅ |
+| Host Inventory subsystem design (`docs/HOST_INVENTORY.md`, [ADR-0008](docs/decisions/0008-host-inventory-ports-and-adapters.md) — Accepted) | ✅ |
 
 This phase's primary output is the documentation set in this repository. The one exception is the `bcs` CLI framework itself (`--help`, `version`, `doctor`, `validate`, with `build`/`install`/`deploy`/`backup`/`restore`/`update`/`config` as unimplemented stubs) — a deliberate, scoped exception, not a sign Boot Manager/Builder/Deploy implementation has started; those remain gated on this phase's review before Phase 1 begins.
 

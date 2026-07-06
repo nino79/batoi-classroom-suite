@@ -88,6 +88,7 @@ Track progress in [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
 | [docs/processes/](docs/processes/) | Development workflow and release process |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | The unified YAML configuration format that drives all three components |
 | [docs/CLI.md](docs/CLI.md) | Complete design of `bcs`, the command-line interface into all three components |
+| [docs/HOST_INVENTORY.md](docs/HOST_INVENTORY.md) | Design for the Host Inventory subsystem, the single source of truth describing the current machine (see [ADR-0008](docs/decisions/0008-host-inventory-ports-and-adapters.md), Accepted) |
 | [cli/README.md](cli/README.md) | `bcs` CLI implementation: setup, layout, and quality-gate commands |
 | [.github/DISCUSSIONS.md](.github/DISCUSSIONS.md) | GitHub Discussions category guide |
 | [REVIEW.md](REVIEW.md) | Independent architecture review and open findings |

@@ -40,5 +40,6 @@ You do not need an ADR for routine documentation fixes, wording clarifications, 
 | [0005](0005-yaml-as-unified-configuration-format.md) | YAML as the unified configuration format | Accepted |
 | [0006](0006-bcs-unified-cli-architecture.md) | `bcs` as a unified CLI, not three component CLIs | Accepted |
 | [0007](0007-python-for-the-bcs-cli.md) | Python (Typer/Rich/Pydantic/PyYAML) for the `bcs` CLI, superseding Bash for this component | Accepted |
+| [0008](0008-host-inventory-ports-and-adapters.md) | Host Inventory as an immutable, ports-and-adapters core domain | Accepted |
 
 This index should be kept in sync with the files in this directory whenever an ADR is added or its status changes.

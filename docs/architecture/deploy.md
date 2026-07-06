@@ -1,6 +1,6 @@
 # Deploy — Architecture
 
-See also: [docs/specifications/deploy.md](../specifications/deploy.md) for the normative requirements this design must satisfy, and [deploy/README.md](../../deploy/README.md) for the component's current status. Invoked by a technician via `bcs install` (single machine) and `bcs deploy` (classroom fleet) — see [docs/CLI.md](../CLI.md#bcs-install) and [docs/CLI.md](../CLI.md#bcs-deploy). Deploy is an intended consumer of the [Host Inventory subsystem](../CLI.md#the-host-inventory-subsystem) (`bcs inventory`) — its `identity` section is the concrete data source for whatever machine-identity scheme resolves the open question below.
+See also: [docs/specifications/deploy.md](../specifications/deploy.md) for the normative requirements this design must satisfy, and [deploy/README.md](../../deploy/README.md) for the component's current status. Invoked by a technician via `bcs install` (single machine) and `bcs deploy` (classroom fleet) — see [docs/CLI.md](../CLI.md#bcs-install) and [docs/CLI.md](../CLI.md#bcs-deploy). Deploy is an intended consumer of the [Host Inventory subsystem](../HOST_INVENTORY.md) (`bcs inventory`) — its `identity` section is the concrete data source for whatever machine-identity scheme resolves the open question below.
 
 ## Purpose
 

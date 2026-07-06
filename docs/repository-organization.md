@@ -102,6 +102,7 @@ batoi-classroom-suite/
 │   ├── guides/                # Contributor-facing guides (getting started, FAQ)
 │   ├── glossary.md
 │   ├── CONFIGURATION.md      # Field-by-field reference for config/schema.yaml
+│   ├── HOST_INVENTORY.md     # Host Inventory subsystem design (ADR-0008, Accepted)
 │   └── repository-organization.md  # This file
 │
 ├── assets/                   # Shared branding assets (logos, icons, fonts, backgrounds)

@@ -16,6 +16,7 @@ This directory contains the detailed documentation for Batoi Classroom Suite (BC
 | [repository-organization.md](repository-organization.md) | Canonical explanation of the whole repository's folder structure. |
 | [CONFIGURATION.md](CONFIGURATION.md) | The unified YAML configuration format (`config/schema.yaml`) that drives Boot Manager, Builder, and Deploy. |
 | [CLI.md](CLI.md) | Complete design of `bcs`, the command-line interface into all three components. |
+| [HOST_INVENTORY.md](HOST_INVENTORY.md) | Design (see [ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md), Accepted) for the Host Inventory subsystem — the single source of truth describing the current machine, consumed by `bcs doctor`, `bcs inventory`, and future Boot Manager/Builder/Deploy/REST API/Web UI. |
 
 ## Reading Order
 
