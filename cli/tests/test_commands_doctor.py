@@ -8,11 +8,13 @@ from bcs.commands import doctor as doctor_module
 from bcs.commands.doctor import run_doctor
 from bcs.errors import PreconditionFailedError, UsageError
 from bcs.inventory.models import (
+    EfiSystemPartition,
     FirmwareInfo,
     NetworkInterface,
     SecureBootState,
     StorageDevice,
     ToolStatus,
+    UsbStorageDevice,
 )
 from bcs.output import OutputFormat
 
@@ -79,6 +81,54 @@ def test_check_storage_fail_when_none_present(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(doctor_module, "collect_storage", list)
     result = doctor_module._check_storage()
     assert result.status == "fail"
+
+
+def test_check_esp_fail_when_not_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_efi_system_partition",
+        lambda: EfiSystemPartition(present=False, mounted=False),
+    )
+    result = doctor_module._check_esp()
+    assert result.status == "fail"
+
+
+def test_check_esp_warn_when_present_but_not_mounted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_efi_system_partition",
+        lambda: EfiSystemPartition(present=True, mounted=False),
+    )
+    result = doctor_module._check_esp()
+    assert result.status == "warn"
+
+
+def test_check_esp_ok_when_mounted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_efi_system_partition",
+        lambda: EfiSystemPartition(present=True, mountPoint="/boot/efi", mounted=True),
+    )
+    result = doctor_module._check_esp()
+    assert result.status == "ok"
+    assert "/boot/efi" in result.message
+
+
+def test_check_usb_storage_skip_when_none_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(doctor_module, "collect_usb_storage", list)
+    result = doctor_module._check_usb_storage()
+    assert result.status == "skip"
+
+
+def test_check_usb_storage_ok_when_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_usb_storage",
+        lambda: [UsbStorageDevice(name="sdb", path="/dev/sdb", mounted=False)],
+    )
+    result = doctor_module._check_usb_storage()
+    assert result.status == "ok"
+    assert "sdb" in result.message
 
 
 def test_check_network_skip_when_only_loopback(monkeypatch: pytest.MonkeyPatch) -> None:

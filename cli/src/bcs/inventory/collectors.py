@@ -24,11 +24,13 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 from pathlib import Path
 
 from bcs.inventory.models import (
     CpuInfo,
+    EfiSystemPartition,
     FirmwareInfo,
     HostIdentity,
     MemoryInfo,
@@ -37,6 +39,7 @@ from bcs.inventory.models import (
     SecureBootState,
     StorageDevice,
     ToolStatus,
+    UsbStorageDevice,
 )
 
 #: External tools Deploy/Builder will eventually shell out to.
@@ -46,11 +49,22 @@ _SYS_FIRMWARE_EFI = Path("/sys/firmware/efi")
 _SYS_FIRMWARE_EFIVARS = Path("/sys/firmware/efi/efivars")
 _SYS_CLASS_NET = Path("/sys/class/net")
 _SYS_CLASS_DMI_PRODUCT_UUID = Path("/sys/class/dmi/id/product_uuid")
+_SYS_BLOCK = Path("/sys/block")
 _DEV = Path("/dev")
+_DEV_DISK_BY_UUID = Path("/dev/disk/by-uuid")
 _PROC_MEMINFO = Path("/proc/meminfo")
 _PROC_CPUINFO = Path("/proc/cpuinfo")
+_PROC_MOUNTS = Path("/proc/mounts")
 _ETC_OS_RELEASE = Path("/etc/os-release")
 _NULL_MAC = "00:00:00:00:00:00"
+
+#: Ubuntu/LliureX (``PLAT-001``/``PLAT-002``) conventionally mount the ESP
+#: here. A non-standard ESP mount point is a known collector limitation
+#: (see ``collect_efi_system_partition``), not a guess at other conventions.
+_ESP_MOUNT_POINT = "/boot/efi"
+
+_NVME_PARTITION_RE = re.compile(r"^(?P<disk>/dev/nvme\d+n\d+)p\d+$")
+_GENERIC_PARTITION_RE = re.compile(r"^(?P<disk>/dev/[a-zA-Z]+)\d+$")
 
 
 def _read_text(path: Path) -> str | None:
@@ -86,6 +100,150 @@ def collect_storage() -> list[StorageDevice]:
         StorageDevice(name=entry.name, path=str(entry), is_nvme=True)
         for entry in sorted(_DEV.glob("nvme[0-9]n[0-9]"))
     ]
+
+
+def collect_efi_system_partition() -> EfiSystemPartition:
+    """Probe the EFI System Partition - see ``BLD-004``, ``DEP-003``, ``CLI-016``.
+
+    Looks only at ``/boot/efi`` (see ``_ESP_MOUNT_POINT``), the Ubuntu/
+    LliureX convention (``PLAT-001``/``PLAT-002``). A machine with a
+    non-standard ESP mount point is reported as ``present=False`` - a
+    documented collector limitation, not a guess at other conventions.
+    """
+    mount = _read_esp_mount()
+    if mount is None:
+        return EfiSystemPartition(present=False, mounted=False)
+    partition, filesystem = mount
+    total, free = _partition_usage(_ESP_MOUNT_POINT)
+    return EfiSystemPartition(
+        present=True,
+        device=_parent_disk(partition),
+        partition=partition,
+        uuid=_partition_uuid(partition),
+        filesystem=filesystem,
+        mount_point=_ESP_MOUNT_POINT,
+        size_bytes=total,
+        free_bytes=free,
+        mounted=True,
+    )
+
+
+def _read_esp_mount() -> tuple[str, str] | None:
+    """Return ``(source_device, filesystem)`` for the last ``/proc/mounts``
+    entry at ``_ESP_MOUNT_POINT``, or ``None`` if nothing is mounted there.
+
+    The *last* matching line wins, mirroring how the kernel's mount table
+    itself reflects the most recent mount at a given point.
+    """
+    text = _read_text(_PROC_MOUNTS)
+    if text is None:
+        return None
+    match: tuple[str, str] | None = None
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[1] == _ESP_MOUNT_POINT:  # noqa: PLR2004
+            match = (parts[0], parts[2])
+    return match
+
+
+def _parent_disk(partition: str) -> str | None:
+    """Derive a whole-disk path (e.g. ``/dev/nvme0n1``) from a partition
+    path (e.g. ``/dev/nvme0n1p1``), using standard Linux device naming.
+    """
+    for pattern in (_NVME_PARTITION_RE, _GENERIC_PARTITION_RE):
+        match = pattern.match(partition)
+        if match:
+            return match.group("disk")
+    return None
+
+
+def _partition_uuid(partition: str) -> str | None:
+    """Look up ``partition``'s filesystem UUID via ``/dev/disk/by-uuid``."""
+    if not _DEV_DISK_BY_UUID.is_dir():
+        return None
+    try:
+        target = os.path.realpath(partition)
+    except OSError:
+        return None
+    for entry in sorted(_DEV_DISK_BY_UUID.iterdir()):
+        if os.path.realpath(entry) == target:
+            return entry.name
+    return None
+
+
+def _partition_usage(mount_point: str) -> tuple[int | None, int | None]:
+    """Return ``(total_bytes, free_bytes)`` for a mounted path, or
+    ``(None, None)`` if unavailable (e.g. non-POSIX platform, race with
+    an unmount between detection and this call).
+    """
+    statvfs = getattr(os, "statvfs", None)
+    if statvfs is None:
+        return None, None
+    try:
+        stats = statvfs(mount_point)
+    except OSError:
+        return None, None
+    return stats.f_frsize * stats.f_blocks, stats.f_frsize * stats.f_bavail
+
+
+def collect_usb_storage() -> list[UsbStorageDevice]:
+    """Enumerate USB-attached storage devices - see ``CLI-016``.
+
+    Scope is deliberately narrow: only USB-attached storage suitable for
+    booting or deployment (e.g. a recovery USB drive) - see ADR-0008's
+    amendment. Devices are identified by (a) the ``removable`` sysfs
+    attribute and (b) a ``usb*`` segment in the resolved sysfs device
+    path, the standard Linux convention for USB-attached block devices.
+    Internal NVMe storage is covered by :func:`collect_storage`, not here.
+    """
+    if not _SYS_BLOCK.is_dir():
+        return []
+    return [
+        _read_usb_storage_device(block_dir)
+        for block_dir in sorted(_SYS_BLOCK.iterdir())
+        if _is_usb_removable(block_dir)
+    ]
+
+
+def _is_usb_removable(block_dir: Path) -> bool:
+    if _read_text(block_dir / "removable") != "1":
+        return False
+    try:
+        real_path = os.path.realpath(block_dir)
+    except OSError:
+        return False
+    return any(part.startswith("usb") for part in Path(real_path).parts)
+
+
+def _read_usb_storage_device(block_dir: Path) -> UsbStorageDevice:
+    name = block_dir.name
+    size_text = _read_text(block_dir / "size")
+    size_bytes = int(size_text) * 512 if size_text and size_text.isdigit() else None
+    mount_point = _find_mounted_partition(name)
+    return UsbStorageDevice(
+        name=name,
+        path=f"/dev/{name}",
+        vendor=_read_text(block_dir / "device" / "vendor"),
+        model=_read_text(block_dir / "device" / "model"),
+        size_bytes=size_bytes,
+        mounted=mount_point is not None,
+        mount_point=mount_point,
+    )
+
+
+def _find_mounted_partition(disk_name: str) -> str | None:
+    """Return the mount point of the first ``/proc/mounts`` entry whose
+    device is ``disk_name`` itself or one of its partitions, or ``None``.
+    """
+    text = _read_text(_PROC_MOUNTS)
+    if text is None:
+        return None
+    prefix = f"/dev/{disk_name}"
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].startswith(prefix):  # noqa: PLR2004
+            return parts[1]
+    return None
 
 
 def collect_network() -> list[NetworkInterface]:
@@ -210,6 +368,7 @@ def collect_tooling(tools: tuple[str, ...] = EXPECTED_TOOLS) -> list[ToolStatus]
 __all__ = [
     "EXPECTED_TOOLS",
     "collect_cpu",
+    "collect_efi_system_partition",
     "collect_firmware",
     "collect_identity",
     "collect_memory",
@@ -217,4 +376,5 @@ __all__ = [
     "collect_operating_system",
     "collect_storage",
     "collect_tooling",
+    "collect_usb_storage",
 ]

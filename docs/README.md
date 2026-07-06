@@ -17,6 +17,7 @@ This directory contains the detailed documentation for Batoi Classroom Suite (BC
 | [CONFIGURATION.md](CONFIGURATION.md) | The unified YAML configuration format (`config/schema.yaml`) that drives Boot Manager, Builder, and Deploy. |
 | [CLI.md](CLI.md) | Complete design of `bcs`, the command-line interface into all three components. |
 | [HOST_INVENTORY.md](HOST_INVENTORY.md) | Design (see [ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md), Accepted) for the Host Inventory subsystem — the single source of truth describing the current machine, consumed by `bcs doctor`, `bcs inventory`, and future Boot Manager/Builder/Deploy/REST API/Web UI. |
+| [PLATFORM_LAYER.md](PLATFORM_LAYER.md) | Design (see [ADR-0009](decisions/0009-platform-layer-command-runner.md), Accepted, not yet implemented) for the Platform Layer — the `CommandRunner` abstraction that centralizes every OS process execution in `cli/`, so business code never calls `subprocess` directly. |
 
 ## Reading Order
 

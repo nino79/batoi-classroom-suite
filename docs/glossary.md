@@ -34,6 +34,8 @@ Domain and technical terms used throughout BCS documentation, in alphabetical or
 
 **partclone** — the underlying partition-cloning tool Clonezilla is built on; produces the partition image format Builder's output must be compatible with (`BLD-003`).
 
+**Platform Layer** — the part of BCS's Python code (`bcs.platform`) that centralizes every process execution (`subprocess`) behind a single `CommandRunner` interface, so business/command code never calls `subprocess` directly (`NFR-008`). See [docs/PLATFORM_LAYER.md](PLATFORM_LAYER.md) and [ADR-0009](decisions/0009-platform-layer-command-runner.md).
+
 **PXE (Preboot Execution Environment)** — a standard allowing a machine to boot over the network without local media, used as the entry point into Deploy's deployment sessions (`DEP-002`).
 
 **Recipe** — informal shorthand for the `spec.builder` and `spec.packages` sections of a ClassroomConfig document: the declarative description of package sets, configuration, and branding that Builder consumes to produce a golden image (`BLD-001`). See [docs/CONFIGURATION.md](CONFIGURATION.md). The term "manifest," used interchangeably with "recipe" in earlier drafts of this documentation, is retired — see [ADR-0005](decisions/0005-yaml-as-unified-configuration-format.md).

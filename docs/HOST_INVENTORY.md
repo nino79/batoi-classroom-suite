@@ -1,6 +1,6 @@
 # Host Inventory Subsystem — Design Proposal
 
-> **Status: Design accepted ([ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md), Accepted).** The ports-and-adapters split, immutability, and JSON-as-canonical-format decisions in this document are approved. Following review, the schema was expanded to add two first-class facts — the EFI System Partition (`efiSystemPartition`) and USB storage devices (`usbStorage`) — recorded as an amendment to ADR-0008; both are additive fields, so `schemaVersion` (`bcs-inventory/v1alpha1`) does not change. Parts of this subsystem are already implemented (see [§ Current Implementation Status](#current-implementation-status-vs-this-proposal)) because the CLI framework work that produced them predates this document; the rest — including both new facts — is not yet implemented. **No code changes accompany this document, ADR-0008's acceptance, or its amendment.** Accepting the architecture does not, by itself, approve each item in [§ Proposed Changes Requiring Approval](#proposed-changes-requiring-approval) — those remain individually open and still need their own sign-off before implementation.
+> **Status: Implemented.** The ports-and-adapters split, immutability, and JSON-as-canonical-format decisions ([ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md), Accepted) are in effect, including its amendment adding the EFI System Partition (`efiSystemPartition`) and USB storage devices (`usbStorage`) as first-class facts — both additive fields, so `schemaVersion` (`bcs-inventory/v1alpha1`) is unchanged. All nine collectors (firmware, Secure Boot, EFI System Partition, CPU, memory, storage devices, USB storage devices, network interfaces, operating system), the `HostInventoryService` orchestration (`collect_host_inventory`), and `bcs doctor` integration (`esp`, `usb-storage` checks) are implemented and tested — see [§ Current Implementation Status](#current-implementation-status-vs-this-proposal). Accepting the architecture does not, by itself, approve each item in [§ Proposed Changes Requiring Approval](#proposed-changes-requiring-approval) — those remain individually open and still need their own sign-off before implementation.
 
 ## Purpose
 
@@ -374,14 +374,12 @@ This is deliberately layered the same way the code is: model tests never touch c
 | Aspect | Status | Notes |
 |---|---|---|
 | Package structure | ✅ Implemented | Matches [§ Package Structure](#package-structure) exactly. |
-| Pydantic models (excluding `EfiSystemPartition`/`UsbStorageDevice`, see below) | ✅ Implemented | Matches [§ Pydantic Models](#pydantic-models) exactly. |
-| Collectors (excluding ESP/USB storage, see below) | ✅ Implemented | Linux-oriented placeholders; degrade gracefully on other platforms (verified on Windows during development). |
-| Service orchestration | ✅ Implemented | |
-| CLI adapter (`bcs inventory`) | ✅ Implemented | |
-| `bcs doctor` integration (excluding `esp`/`usb-storage` checks, see below) | ✅ Implemented | Refactored onto `inventory.collectors` in the same change that introduced this subsystem. |
-| Unit tests | ✅ Implemented | See [§ Testing Strategy](#testing-strategy); 209 tests pass across the whole `cli/` package as of this writing. |
-| `EfiSystemPartition` model and `HostInventory.efiSystemPartition` field | 📝 Design accepted, not implemented | Schema decided per [ADR-0008's amendment](decisions/0008-host-inventory-ports-and-adapters.md#amendment-efi-system-partition-and-usb-storage); `collect_efi_system_partition()` and the `bcs doctor` `esp` check do not exist yet - awaiting implementation approval. |
-| `UsbStorageDevice` model and `HostInventory.usbStorage` field | 📝 Design accepted, not implemented | Schema decided per the same amendment; `collect_usb_storage()` and the `bcs doctor` `usb-storage` check do not exist yet - awaiting implementation approval. |
+| Pydantic models, including `EfiSystemPartition`/`UsbStorageDevice` | ✅ Implemented | Matches [§ Pydantic Models](#pydantic-models) exactly. |
+| Collectors, including ESP/USB storage | ✅ Implemented | Linux-oriented placeholders (`/boot/efi` convention for the ESP; sysfs `removable` + `usb*` path segment for USB storage); degrade gracefully on other platforms (verified on Windows during development). |
+| Service orchestration | ✅ Implemented | `collect_host_inventory()` calls all nine collectors; see the naming note below. |
+| CLI adapter (`bcs inventory`) | ✅ Implemented | Text/JSON/YAML rendering covers the ESP and USB storage sections too. |
+| `bcs doctor` integration, including `esp`/`usb-storage` checks | ✅ Implemented | Refactored onto `inventory.collectors` in the same change that introduced this subsystem. |
+| Unit tests | ✅ Implemented | See [§ Testing Strategy](#testing-strategy); 234 tests pass across the whole `cli/` package as of this writing. |
 | Collection-caveat reporting (e.g. distinguishing "no NVMe present" from "storage detection unsupported here") | 💡 Proposed | Not implemented - see [§ Proposed Changes](#proposed-changes-requiring-approval) item 1. |
 | Checked-in JSON Schema artifact | 💡 Proposed | Not implemented - item 2. |
 | Golden-file schema regression test | 💡 Proposed | Not implemented - item 3. |
@@ -389,6 +387,8 @@ This is deliberately layered the same way the code is: model tests never touch c
 | REST API adapter | 💤 Not started | Design only, this document. No framework choice made. |
 | Web UI | 💤 Not started | Design only, further out; see [§ Interaction with a Future Web UI](#interaction-with-a-future-web-ui). |
 | Boot Manager / Builder / Deploy consumption | 💤 Not started | Those components remain documentation-only (see [ROADMAP.md](../ROADMAP.md)). |
+
+**Naming note, flagged rather than guessed:** the orchestration step was requested as "a `HostInventoryService`," but this document (§ [Responsibilities of Each Class / Module](#responsibilities-of-each-class--module)) and the code both already name it `bcs.inventory.service.collect_host_inventory` - a plain function, not a class - predating that request. Since this document governs "implement exactly as documented," the implementation followed the existing documented function rather than introducing a new `HostInventoryService` class; no behavior differs either way; a request to add a class wrapper is a two-line, no-risk follow-up.
 
 ## Proposed Changes Requiring Approval
 

@@ -26,7 +26,9 @@ def collect_host_inventory() -> HostInventory:
         operating_system=collectors.collect_operating_system(),
         cpu=collectors.collect_cpu(),
         memory=collectors.collect_memory(),
+        efi_system_partition=collectors.collect_efi_system_partition(),
         storage=collectors.collect_storage(),
+        usb_storage=collectors.collect_usb_storage(),
         network=collectors.collect_network(),
         tooling=collectors.collect_tooling(),
     )

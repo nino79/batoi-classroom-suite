@@ -5,6 +5,7 @@ import pytest
 from bcs.inventory import collectors, service
 from bcs.inventory.models import (
     CpuInfo,
+    EfiSystemPartition,
     FirmwareInfo,
     HostIdentity,
     MemoryInfo,
@@ -13,6 +14,7 @@ from bcs.inventory.models import (
     SecureBootState,
     StorageDevice,
     ToolStatus,
+    UsbStorageDevice,
 )
 
 
@@ -36,8 +38,18 @@ def test_collect_host_inventory_assembles_all_sections(monkeypatch: pytest.Monke
     monkeypatch.setattr(collectors, "collect_memory", lambda: MemoryInfo(totalBytes=1024))
     monkeypatch.setattr(
         collectors,
+        "collect_efi_system_partition",
+        lambda: EfiSystemPartition(present=True, mountPoint="/boot/efi", mounted=True),
+    )
+    monkeypatch.setattr(
+        collectors,
         "collect_storage",
         lambda: [StorageDevice(name="nvme0n1", path="/dev/nvme0n1", isNvme=True)],
+    )
+    monkeypatch.setattr(
+        collectors,
+        "collect_usb_storage",
+        lambda: [UsbStorageDevice(name="sdb", path="/dev/sdb", mounted=False)],
     )
     monkeypatch.setattr(
         collectors,
@@ -57,8 +69,12 @@ def test_collect_host_inventory_assembles_all_sections(monkeypatch: pytest.Monke
     assert inventory.operating_system.name == "LliureX"
     assert inventory.cpu.logical_cores == 8
     assert inventory.memory.total_bytes == 1024
+    assert inventory.efi_system_partition.present is True
+    assert inventory.efi_system_partition.mount_point == "/boot/efi"
     assert len(inventory.storage) == 1
     assert inventory.storage[0].name == "nvme0n1"
+    assert len(inventory.usb_storage) == 1
+    assert inventory.usb_storage[0].name == "sdb"
     assert len(inventory.network) == 1
     assert inventory.network[0].name == "eth0"
     assert len(inventory.tooling) == 1

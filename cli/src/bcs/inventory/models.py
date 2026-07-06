@@ -1,7 +1,8 @@
 """Immutable data models for the Host Inventory subsystem.
 
 ``HostInventory`` is BCS's single source of truth describing the
-current machine: firmware, storage, network, operating system, and
+current machine: firmware (including the EFI System Partition),
+storage (including USB storage), network, operating system, and
 tooling facts collected from the host ``bcs`` runs on. It is
 deliberately decoupled from any one consumer - Boot Manager, Builder,
 and Deploy (once implemented, in Bash per ADR-0004) all consume the
@@ -79,6 +80,25 @@ class FirmwareInfo(FrozenModel):
     version: str | None = None
 
 
+class EfiSystemPartition(FrozenModel):
+    """The UEFI ESP, as observed - see ``BLD-004``, ``DEP-003``, ``CLI-016``.
+
+    Kept as its own model rather than folded into ``FirmwareInfo`` (a
+    firmware-only fact area) or ``StorageDevice`` (whole block devices,
+    not partitions) - see ADR-0008's amendment for why.
+    """
+
+    present: bool
+    device: str | None = None
+    partition: str | None = None
+    uuid: str | None = None
+    filesystem: str | None = None
+    mount_point: str | None = Field(alias="mountPoint", default=None)
+    size_bytes: int | None = Field(alias="sizeBytes", default=None)
+    free_bytes: int | None = Field(alias="freeBytes", default=None)
+    mounted: bool
+
+
 class StorageDevice(FrozenModel):
     """One block storage device - see ``PLAT-005`` (NVMe as the primary target)."""
 
@@ -87,6 +107,23 @@ class StorageDevice(FrozenModel):
     is_nvme: bool = Field(alias="isNvme")
     size_bytes: int | None = Field(alias="sizeBytes", default=None)
     model: str | None = None
+
+
+class UsbStorageDevice(FrozenModel):
+    """One USB-attached storage device suitable for booting or deployment.
+
+    Deliberately narrower than "USB devices" in general: keyboards, mice,
+    webcams, and hubs are out of scope - see ``CLI-016`` and ADR-0008's
+    amendment for why Host Inventory models USB storage only.
+    """
+
+    name: str
+    path: str
+    vendor: str | None = None
+    model: str | None = None
+    size_bytes: int | None = Field(alias="sizeBytes", default=None)
+    mounted: bool
+    mount_point: str | None = Field(alias="mountPoint", default=None)
 
 
 class NetworkInterface(FrozenModel):
@@ -159,7 +196,9 @@ class HostInventory(FrozenExtensibleModel):
     operating_system: OperatingSystemInfo = Field(alias="operatingSystem")
     cpu: CpuInfo
     memory: MemoryInfo
+    efi_system_partition: EfiSystemPartition = Field(alias="efiSystemPartition")
     storage: list[StorageDevice] = Field(default_factory=list)
+    usb_storage: list[UsbStorageDevice] = Field(alias="usbStorage", default_factory=list)
     network: list[NetworkInterface] = Field(default_factory=list)
     tooling: list[ToolStatus] = Field(default_factory=list)
 
@@ -167,6 +206,7 @@ class HostInventory(FrozenExtensibleModel):
 __all__ = [
     "INVENTORY_SCHEMA_VERSION",
     "CpuInfo",
+    "EfiSystemPartition",
     "FirmwareInfo",
     "FrozenExtensibleModel",
     "FrozenModel",
@@ -178,4 +218,5 @@ __all__ = [
     "SecureBootState",
     "StorageDevice",
     "ToolStatus",
+    "UsbStorageDevice",
 ]

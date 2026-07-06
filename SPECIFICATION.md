@@ -89,6 +89,7 @@ The `bcs` command-line interface is the single operator entry point into Boot Ma
 | NFR-005 | **Maintainability.** Each component MUST be operable and testable independently of the other two, per the boundaries in [ARCHITECTURE.md](ARCHITECTURE.md). |
 | NFR-006 | **Localisation.** User-facing text MUST support Valencian and Spanish; all code, identifiers, and documentation are in English. |
 | NFR-007 | **Idempotency.** Re-running a deployment against a machine already at the target image version MUST be safe and MUST NOT be required to complete normal operation. |
+| NFR-008 | **Auditable process execution.** Every external command invocation from BCS's Python code MUST be executed through the Platform Layer's `CommandRunner` (see [docs/PLATFORM_LAYER.md](docs/PLATFORM_LAYER.md), [ADR-0009](docs/decisions/0009-platform-layer-command-runner.md)) — centrally logged and timeout-bounded — never invoked ad hoc via `subprocess` from business/command code. |
 
 ## 4. Explicit Non-Goals
 

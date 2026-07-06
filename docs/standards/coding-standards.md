@@ -2,7 +2,7 @@
 
 These are the cross-cutting principles that apply to any implementation code in BCS, regardless of language. Bash-specific syntax rules are in [bash-style-guide.md](bash-style-guide.md); this document covers the *why* and the *what*, not language mechanics.
 
-No implementation code exists yet (see [ROADMAP.md](../../ROADMAP.md)) — this document is written ahead of implementation deliberately, so that the first lines of code are held to the same bar as line 100,000.
+Boot Manager, Builder, and Deploy have no implementation code yet (see [ROADMAP.md](../../ROADMAP.md)) — most of this document was written ahead of their implementation deliberately, so that the first lines of code are held to the same bar as line 100,000. The `bcs` CLI (`cli/`) is implemented and is where the Python-specific rules below (see [§ OS Interaction](#os-interaction-python-components)) already apply in practice.
 
 ## Language Policy
 
@@ -21,6 +21,13 @@ Per `NFR-007`, re-running an operation against a target already at the desired s
 - Deploy operations must detect "already at target image version" and treat re-running as a no-op success, not an error, and not a redundant re-image.
 - Builder operations given the same recipe and pinned inputs should be safely re-runnable without manual cleanup between runs (supports `BLD-005`, reproducibility).
 - Boot Manager configuration changes should be safe to apply repeatedly (e.g., re-registering a UEFI boot entry that already exists, per `BM-003`, must not create duplicates).
+
+## OS Interaction (Python Components)
+
+**Direct use of `subprocess.run()`, `subprocess.Popen()`, or equivalent (`os.system`, `os.popen`, `os.exec*`) outside `bcs.platform` is forbidden.** This is a hard prohibition, not a style preference: every external process `cli/`'s code spawns MUST go through the Platform Layer's `CommandRunner` (`NFR-008`) — the one seam where OS interaction is centralized, logged, and timeout-bounded. See [docs/PLATFORM_LAYER.md](../PLATFORM_LAYER.md) and [ADR-0009](../decisions/0009-platform-layer-command-runner.md).
+
+- **Commands are always an argument list, never a shell string.** `shell=True` is never passed to `subprocess`, anywhere, under any circumstance — see [docs/PLATFORM_LAYER.md § Architectural Rule: Argument Lists Only](../PLATFORM_LAYER.md#architectural-rule-argument-lists-only-never-shelltrue). This is enforced mechanically, not just by review: `cli/pyproject.toml` scopes Ruff's Bandit-derived `S603`/`S607` subprocess-call warnings to fail on any file outside the two reviewed exceptions (`bcs.plugins`, `bcs.platform.execution`).
+- The one reviewed exception is `bcs.plugins.run_plugin`'s plugin dispatch, which needs full passthrough stdio for interactive plugins — see [docs/PLATFORM_LAYER.md § Relationship to Existing Code](../PLATFORM_LAYER.md#relationship-to-existing-code) for why this is a deliberate, narrow carve-out and not a precedent for anything else.
 
 ## Logging and Observability
 

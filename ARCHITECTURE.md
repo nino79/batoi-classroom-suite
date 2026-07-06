@@ -108,6 +108,7 @@ flowchart TB
 - **Localisation.** LliureX serves a bilingual (Valencian/Spanish) audience; Boot Manager's UI and Builder's default recipe must support both, with English as the documentation and code-comment language.
 - **Observability.** Deploy must produce per-machine, per-session logs/reports usable by a single technician managing many classrooms; this is a non-functional requirement, not an afterthought.
 - **Hardware scope.** All three components target UEFI + NVMe as the primary supported hardware profile. Legacy BIOS and spinning-disk support are explicitly out of scope for v1.0 (see [SPECIFICATION.md](SPECIFICATION.md)).
+- **OS interaction.** BCS's Python code (`cli/`) centralizes all process execution behind a Platform Layer (`bcs.platform`, see [docs/PLATFORM_LAYER.md](docs/PLATFORM_LAYER.md) and [ADR-0009](docs/decisions/0009-platform-layer-command-runner.md), Accepted, not yet implemented) — business/command code never calls `subprocess` directly (`NFR-008`).
 
 ## 6. What BCS Is Not
 
@@ -125,6 +126,9 @@ Significant, hard-to-reverse decisions are recorded as ADRs in [docs/decisions/]
 - [ADR-0004 — Bash as the primary implementation language](docs/decisions/0004-bash-as-primary-implementation-language.md)
 - [ADR-0005 — YAML as the unified configuration format](docs/decisions/0005-yaml-as-unified-configuration-format.md)
 - [ADR-0006 — `bcs` as a unified CLI, not three component CLIs](docs/decisions/0006-bcs-unified-cli-architecture.md)
+- [ADR-0007 — Python for the `bcs` CLI, superseding Bash for this component](docs/decisions/0007-python-for-the-bcs-cli.md)
+- [ADR-0008 — Host Inventory as an immutable, ports-and-adapters core domain](docs/decisions/0008-host-inventory-ports-and-adapters.md)
+- [ADR-0009 — Platform Layer as the sole path to process execution](docs/decisions/0009-platform-layer-command-runner.md)
 
 ## 8. Operator Interface
 

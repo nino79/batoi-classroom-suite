@@ -95,6 +95,8 @@ Boot Manager has no direct `bcs` command: it is configured by Builder baking `sp
 
 In short: `bcs doctor`'s checks evaluate pass/fail *against* Host Inventory facts rather than probing the host a second time, so `doctor` and `inventory` can never disagree about what the machine looks like; Boot Manager, Builder, and Deploy are each expected to consume the same `bcs inventory --output json` payload rather than re-implementing detection; and the subsystem's models are immutable and carry their own `schemaVersion` (`bcs-inventory/v1alpha1`), independent of `bcs-cli/v1alpha1` (`bcs`'s own output schema) and `bcs/v1alpha1` (ClassroomConfig) — see [Extensibility & Versioning](#extensibility--versioning).
 
+Any future collector that needs to shell out to an external tool (rather than reading `/proc`/`/sys` directly) is expected to do so through the Platform Layer's `CommandRunner`, never a direct `subprocess` call — see [docs/PLATFORM_LAYER.md](PLATFORM_LAYER.md) and [ADR-0009](decisions/0009-platform-layer-command-runner.md) (Accepted, not yet implemented).
+
 The `identity` section (primary MAC address, DMI product UUID) exists specifically to narrow — not resolve — the open `deploy.maintenanceRequests.machineIdentity` question from [`spec.deploy`](CONFIGURATION.md#specdeploy) and [docs/architecture/deploy.md](architecture/deploy.md#open-questions): it records what identity data is actually available on a real host, without deciding the maintenance request's wire format.
 
 ## Invocation Grammar

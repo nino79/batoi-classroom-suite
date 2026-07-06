@@ -6,14 +6,14 @@ another and of whether a ClassroomConfig resolves at all - only the
 is a ``warn``, not a hard failure, since ``doctor`` is meant to be
 useful before a classroom has been configured yet.
 
-``firmware``, ``secure-boot``, ``storage``, ``network``, and
-``tooling`` are pass/fail *evaluations* of facts collected by the Host
-Inventory subsystem (:mod:`bcs.inventory`) - they no longer probe the
-host directly, so ``bcs doctor`` and ``bcs inventory`` can never
-disagree about what the machine actually looks like. ``permissions``
-(a fact about the current *process*, not the host) and ``config`` (a
-ClassroomConfig concern) are doctor-specific and stay outside the
-inventory subsystem's scope.
+``firmware``, ``secure-boot``, ``esp``, ``storage``, ``usb-storage``,
+``network``, and ``tooling`` are pass/fail *evaluations* of facts
+collected by the Host Inventory subsystem (:mod:`bcs.inventory`) - they
+no longer probe the host directly, so ``bcs doctor`` and ``bcs
+inventory`` can never disagree about what the machine actually looks
+like. ``permissions`` (a fact about the current *process*, not the
+host) and ``config`` (a ClassroomConfig concern) are doctor-specific
+and stay outside the inventory subsystem's scope.
 """
 
 from __future__ import annotations
@@ -27,10 +27,12 @@ from bcs.config.validator import validate_document
 from bcs.context import RuntimeContext
 from bcs.errors import PreconditionFailedError, UsageError
 from bcs.inventory.collectors import (
+    collect_efi_system_partition,
     collect_firmware,
     collect_network,
     collect_storage,
     collect_tooling,
+    collect_usb_storage,
 )
 from bcs.inventory.models import SecureBootState
 from bcs.output import OutputFormat, print_structured_result
@@ -74,6 +76,23 @@ def _check_storage() -> CheckResult:
         names = ", ".join(device.name for device in devices)
         return CheckResult("storage", "ok", f"NVMe device(s) found: {names}")
     return CheckResult("storage", "fail", "no NVMe device found (PLAT-005)")
+
+
+def _check_esp() -> CheckResult:
+    esp = collect_efi_system_partition()
+    if not esp.present:
+        return CheckResult("esp", "fail", "no EFI System Partition found (BLD-004/DEP-003)")
+    if not esp.mounted:
+        return CheckResult("esp", "warn", "EFI System Partition present but not mounted")
+    return CheckResult("esp", "ok", f"EFI System Partition mounted at {esp.mount_point}")
+
+
+def _check_usb_storage() -> CheckResult:
+    devices = collect_usb_storage()
+    if not devices:
+        return CheckResult("usb-storage", "skip", "no USB storage devices detected")
+    names = ", ".join(device.name for device in devices)
+    return CheckResult("usb-storage", "ok", f"USB storage device(s) found: {names}")
 
 
 def _check_network() -> CheckResult:
@@ -130,7 +149,9 @@ def _check_config(runtime: RuntimeContext) -> CheckResult:
 _ALL_CHECKS: dict[str, Callable[[RuntimeContext], CheckResult]] = {
     "firmware": lambda _runtime: _check_firmware(),
     "secure-boot": lambda _runtime: _check_secure_boot(),
+    "esp": lambda _runtime: _check_esp(),
     "storage": lambda _runtime: _check_storage(),
+    "usb-storage": lambda _runtime: _check_usb_storage(),
     "network": lambda _runtime: _check_network(),
     "tooling": lambda _runtime: _check_tooling(),
     "permissions": lambda _runtime: _check_permissions(),

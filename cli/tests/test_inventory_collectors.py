@@ -72,6 +72,219 @@ def test_storage_finds_nvme_devices(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 
 # ---------------------------------------------------------------------------
+# EFI System Partition
+# ---------------------------------------------------------------------------
+
+
+def test_esp_absent_when_proc_mounts_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(collectors, "_PROC_MOUNTS", tmp_path / "no-mounts")
+    esp = collectors.collect_efi_system_partition()
+    assert esp.present is False
+    assert esp.mounted is False
+
+
+def test_esp_absent_when_no_matching_mount(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    mounts = tmp_path / "mounts"
+    mounts.write_text("/dev/nvme0n1p2 / ext4 rw 0 0\n", encoding="utf-8")
+    monkeypatch.setattr(collectors, "_PROC_MOUNTS", mounts)
+    esp = collectors.collect_efi_system_partition()
+    assert esp.present is False
+
+
+def test_esp_present_and_mounted(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    mounts = tmp_path / "mounts"
+    mounts.write_text(
+        "/dev/nvme0n1p2 / ext4 rw 0 0\n/dev/nvme0n1p1 /boot/efi vfat rw 0 0\n",
+        encoding="utf-8",
+    )
+    by_uuid_dir = tmp_path / "by-uuid"
+    by_uuid_dir.mkdir()
+    # A regular file stands in for a real ``/dev/disk/by-uuid`` symlink -
+    # this exercises the resolved-path matching logic without needing
+    # real symlink privileges in the test environment (production
+    # entries are always symlinks; the matching code only cares about
+    # the resolved path, not whether it got there via a symlink).
+    partition_file = by_uuid_dir / "ABCD-1234"
+    partition_file.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(collectors, "_PROC_MOUNTS", mounts)
+    monkeypatch.setattr(collectors, "_DEV_DISK_BY_UUID", by_uuid_dir)
+
+    def fake_realpath(path: object) -> str:
+        return str(partition_file) if str(path) == "/dev/nvme0n1p1" else str(path)
+
+    monkeypatch.setattr(collectors.os.path, "realpath", fake_realpath)
+
+    class _FakeStatvfs:
+        f_frsize = 512
+        f_blocks = 1_000_000
+        f_bavail = 500_000
+
+    monkeypatch.setattr(collectors.os, "statvfs", lambda _path: _FakeStatvfs(), raising=False)
+
+    esp = collectors.collect_efi_system_partition()
+    assert esp.present is True
+    assert esp.mounted is True
+    assert esp.partition == "/dev/nvme0n1p1"
+    assert esp.device == "/dev/nvme0n1"
+    assert esp.filesystem == "vfat"
+    assert esp.mount_point == "/boot/efi"
+    assert esp.uuid == "ABCD-1234"
+    assert esp.size_bytes == 512 * 1_000_000
+    assert esp.free_bytes == 512 * 500_000
+
+
+def test_parent_disk_returns_none_for_unrecognized_device_naming() -> None:
+    assert collectors._parent_disk("/dev/mapper/vg-lv") is None
+
+
+def test_partition_uuid_returns_none_when_realpath_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    by_uuid_dir = tmp_path / "by-uuid"
+    by_uuid_dir.mkdir()
+    monkeypatch.setattr(collectors, "_DEV_DISK_BY_UUID", by_uuid_dir)
+
+    def raise_oserror(_path: object) -> str:
+        raise OSError("boom")
+
+    monkeypatch.setattr(collectors.os.path, "realpath", raise_oserror)
+    assert collectors._partition_uuid("/dev/sda1") is None
+
+
+def test_partition_usage_returns_none_when_statvfs_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_oserror(_path: object) -> object:
+        raise OSError("boom")
+
+    monkeypatch.setattr(collectors.os, "statvfs", raise_oserror, raising=False)
+    assert collectors._partition_usage("/boot/efi") == (None, None)
+
+
+def test_esp_sizes_none_when_statvfs_unavailable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mounts = tmp_path / "mounts"
+    mounts.write_text("/dev/sda1 /boot/efi vfat rw 0 0\n", encoding="utf-8")
+    monkeypatch.setattr(collectors, "_PROC_MOUNTS", mounts)
+    monkeypatch.setattr(collectors, "_DEV_DISK_BY_UUID", tmp_path / "no-by-uuid")
+    monkeypatch.delattr(collectors.os, "statvfs", raising=False)
+
+    esp = collectors.collect_efi_system_partition()
+    assert esp.present is True
+    assert esp.device == "/dev/sda"
+    assert esp.size_bytes is None
+    assert esp.free_bytes is None
+    assert esp.uuid is None
+
+
+# ---------------------------------------------------------------------------
+# USB storage
+# ---------------------------------------------------------------------------
+
+
+def test_usb_storage_empty_when_sys_block_absent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(collectors, "_SYS_BLOCK", tmp_path / "no-block")
+    assert collectors.collect_usb_storage() == []
+
+
+def test_usb_storage_finds_removable_usb_device_and_excludes_non_removable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    block_dir = tmp_path / "block"
+    sdb_dir = block_dir / "sdb"
+    device_dir = sdb_dir / "device"
+    device_dir.mkdir(parents=True)
+    (sdb_dir / "removable").write_text("1\n", encoding="utf-8")
+    (sdb_dir / "size").write_text("31277232\n", encoding="utf-8")
+    (device_dir / "vendor").write_text("SanDisk \n", encoding="utf-8")
+    (device_dir / "model").write_text("Ultra\n", encoding="utf-8")
+
+    # An internal, non-removable disk must be excluded.
+    nvme_dir = block_dir / "nvme0n1"
+    nvme_dir.mkdir()
+    (nvme_dir / "removable").write_text("0\n", encoding="utf-8")
+
+    monkeypatch.setattr(collectors, "_SYS_BLOCK", block_dir)
+    monkeypatch.setattr(collectors, "_PROC_MOUNTS", tmp_path / "no-mounts")
+
+    def fake_realpath(path: object) -> str:
+        if str(path) == str(sdb_dir):
+            return str(tmp_path / "pci0000" / "usb1" / "1-1" / "block" / "sdb")
+        return str(path)
+
+    monkeypatch.setattr(collectors.os.path, "realpath", fake_realpath)
+
+    devices = collectors.collect_usb_storage()
+    assert [d.name for d in devices] == ["sdb"]
+    device = devices[0]
+    assert device.path == "/dev/sdb"
+    assert device.vendor == "SanDisk"
+    assert device.model == "Ultra"
+    assert device.size_bytes == 31277232 * 512
+    assert device.mounted is False
+    assert device.mount_point is None
+
+
+def test_is_usb_removable_false_when_realpath_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    block_dir = tmp_path / "sdb"
+    block_dir.mkdir()
+    (block_dir / "removable").write_text("1\n", encoding="utf-8")
+
+    def raise_oserror(_path: object) -> str:
+        raise OSError("boom")
+
+    monkeypatch.setattr(collectors.os.path, "realpath", raise_oserror)
+    assert collectors._is_usb_removable(block_dir) is False
+
+
+def test_usb_storage_excludes_removable_device_not_under_usb(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A removable device (e.g. an internal SD card reader) that isn't
+    actually USB-attached must not be reported as USB storage.
+    """
+    block_dir = tmp_path / "block"
+    mmc_dir = block_dir / "mmcblk0"
+    mmc_dir.mkdir(parents=True)
+    (mmc_dir / "removable").write_text("1\n", encoding="utf-8")
+
+    monkeypatch.setattr(collectors, "_SYS_BLOCK", block_dir)
+    fake_path = str(tmp_path / "mmc_host0" / "block" / "mmcblk0")
+    monkeypatch.setattr(collectors.os.path, "realpath", lambda _path: fake_path)
+
+    assert collectors.collect_usb_storage() == []
+
+
+def test_usb_storage_reports_mounted_partition(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    block_dir = tmp_path / "block"
+    sdb_dir = block_dir / "sdb"
+    sdb_dir.mkdir(parents=True)
+    (sdb_dir / "removable").write_text("1\n", encoding="utf-8")
+
+    monkeypatch.setattr(collectors, "_SYS_BLOCK", block_dir)
+    fake_path = str(tmp_path / "usb1" / "block" / "sdb")
+    monkeypatch.setattr(collectors.os.path, "realpath", lambda _path: fake_path)
+
+    mounts = tmp_path / "mounts"
+    mounts.write_text("/dev/sdb1 /media/usb0 vfat rw 0 0\n", encoding="utf-8")
+    monkeypatch.setattr(collectors, "_PROC_MOUNTS", mounts)
+
+    devices = collectors.collect_usb_storage()
+    assert devices[0].mounted is True
+    assert devices[0].mount_point == "/media/usb0"
+
+
+# ---------------------------------------------------------------------------
 # network
 # ---------------------------------------------------------------------------
 
