@@ -1,10 +1,10 @@
 # Host Inventory Subsystem — Design Proposal
 
-> **Status: Design accepted ([ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md), Accepted).** The ports-and-adapters split, immutability, and JSON-as-canonical-format decisions in this document are approved. Parts of this subsystem are already implemented (see [§ Current Implementation Status](#current-implementation-status-vs-this-proposal)) because the CLI framework work that produced them predates this document; the rest is not yet implemented. **No code changes accompany this document or ADR-0008's acceptance.** Accepting the architecture does not, by itself, approve each item in [§ Proposed Changes Requiring Approval](#proposed-changes-requiring-approval) — those remain individually open and still need their own sign-off before implementation.
+> **Status: Design accepted ([ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md), Accepted).** The ports-and-adapters split, immutability, and JSON-as-canonical-format decisions in this document are approved. Following review, the schema was expanded to add two first-class facts — the EFI System Partition (`efiSystemPartition`) and USB storage devices (`usbStorage`) — recorded as an amendment to ADR-0008; both are additive fields, so `schemaVersion` (`bcs-inventory/v1alpha1`) does not change. Parts of this subsystem are already implemented (see [§ Current Implementation Status](#current-implementation-status-vs-this-proposal)) because the CLI framework work that produced them predates this document; the rest — including both new facts — is not yet implemented. **No code changes accompany this document, ADR-0008's acceptance, or its amendment.** Accepting the architecture does not, by itself, approve each item in [§ Proposed Changes Requiring Approval](#proposed-changes-requiring-approval) — those remain individually open and still need their own sign-off before implementation.
 
 ## Purpose
 
-The Host Inventory subsystem is BCS's single source of truth describing the current machine: firmware, storage, network, identity, operating system, CPU, memory, and tooling facts. It exists so that **hardware detection happens in exactly one place**. Every other part of BCS — `bcs doctor`, and eventually Boot Manager, Builder, and Deploy — consumes this subsystem's output instead of independently re-probing the same facts, which is precisely the kind of duplicated-concept risk this project's own [REVIEW.md](../REVIEW.md) exists to catch.
+The Host Inventory subsystem is BCS's single source of truth describing the current machine: firmware (including the EFI System Partition), storage (including USB storage suitable for booting or deployment), network, identity, operating system, CPU, memory, and tooling facts. It exists so that **hardware detection happens in exactly one place**. Every other part of BCS — `bcs doctor`, and eventually Boot Manager, Builder, and Deploy — consumes this subsystem's output instead of independently re-probing the same facts, which is precisely the kind of duplicated-concept risk this project's own [REVIEW.md](../REVIEW.md) exists to catch.
 
 This is a cross-cutting subsystem, not a fourth BCS component (it does not appear in [ARCHITECTURE.md §3](../ARCHITECTURE.md#3-components)), in the same sense that [ClassroomConfig](CONFIGURATION.md) and the `bcs` CLI itself ([ARCHITECTURE.md §8](../ARCHITECTURE.md#8-operator-interface)) are not components: it is shared infrastructure that Boot Manager, Builder, and Deploy are each expected to depend on.
 
@@ -54,7 +54,9 @@ classDiagram
         +OperatingSystemInfo operating_system
         +CpuInfo cpu
         +MemoryInfo memory
+        +EfiSystemPartition efi_system_partition
         +StorageDevice[] storage
+        +UsbStorageDevice[] usb_storage
         +NetworkInterface[] network
         +ToolStatus[] tooling
     }
@@ -75,12 +77,32 @@ classDiagram
         UNSUPPORTED
         UNKNOWN
     }
+    class EfiSystemPartition {
+        +bool present
+        +str~opt~ device
+        +str~opt~ partition
+        +str~opt~ uuid
+        +str~opt~ filesystem
+        +str~opt~ mount_point
+        +int~opt~ size_bytes
+        +int~opt~ free_bytes
+        +bool mounted
+    }
     class StorageDevice {
         +str name
         +str path
         +bool is_nvme
         +int~opt~ size_bytes
         +str~opt~ model
+    }
+    class UsbStorageDevice {
+        +str name
+        +str path
+        +str~opt~ vendor
+        +str~opt~ model
+        +int~opt~ size_bytes
+        +bool mounted
+        +str~opt~ mount_point
     }
     class NetworkInterface {
         +str name
@@ -115,7 +137,9 @@ classDiagram
     HostInventory *-- OperatingSystemInfo
     HostInventory *-- CpuInfo
     HostInventory *-- MemoryInfo
+    HostInventory *-- EfiSystemPartition
     HostInventory "1" *-- "0..*" StorageDevice
+    HostInventory "1" *-- "0..*" UsbStorageDevice
     HostInventory "1" *-- "0..*" NetworkInterface
     HostInventory "1" *-- "0..*" ToolStatus
     FirmwareInfo --> SecureBootState
@@ -125,11 +149,13 @@ Field-level detail (types shown are the Python/Pydantic types; JSON keys are the
 
 | Model | Fields |
 |---|---|
-| `HostInventory` | `schema_version` (`schemaVersion`, fixed literal) · `collected_at` (`collectedAt`, `datetime`) · `identity` · `firmware` · `operating_system` (`operatingSystem`) · `cpu` · `memory` · `storage: list[StorageDevice]` · `network: list[NetworkInterface]` · `tooling: list[ToolStatus]` |
+| `HostInventory` | `schema_version` (`schemaVersion`, fixed literal) · `collected_at` (`collectedAt`, `datetime`) · `identity` · `firmware` · `operating_system` (`operatingSystem`) · `cpu` · `memory` · `efi_system_partition` (`efiSystemPartition`) · `storage: list[StorageDevice]` · `usb_storage` (`usbStorage`, `list[UsbStorageDevice]`) · `network: list[NetworkInterface]` · `tooling: list[ToolStatus]` |
 | `HostIdentity` | `primary_mac_address` (`primaryMacAddress`, optional) · `dmi_product_uuid` (`dmiProductUuid`, optional) |
 | `FirmwareInfo` | `uefi: bool` · `secure_boot` (`secureBoot`, `SecureBootState`) · `vendor: str \| None` · `version: str \| None` |
 | `SecureBootState` (`StrEnum`) | `enabled` · `disabled` · `unsupported` (not UEFI, or firmware has no Secure Boot at all) · `unknown` (UEFI, but state undetermined) |
+| `EfiSystemPartition` | `present: bool` · `device: str \| None` (e.g. `/dev/nvme0n1`) · `partition: str \| None` (e.g. `/dev/nvme0n1p1`) · `uuid: str \| None` (partition UUID) · `filesystem: str \| None` (e.g. `vfat`) · `mount_point` (`mountPoint`, optional) · `size_bytes` (`sizeBytes`, optional) · `free_bytes` (`freeBytes`, optional) · `mounted: bool` |
 | `StorageDevice` | `name: str` · `path: str` · `is_nvme` (`isNvme`, `bool`) · `size_bytes` (`sizeBytes`, optional) · `model: str \| None` |
+| `UsbStorageDevice` | `name: str` · `path: str` (e.g. `/dev/sdb`) · `vendor: str \| None` · `model: str \| None` · `size_bytes` (`sizeBytes`, optional) · `mounted: bool` · `mount_point` (`mountPoint`, optional) |
 | `NetworkInterface` | `name: str` · `mac_address` (`macAddress`, optional) · `ip_addresses` (`ipAddresses`, `list[str]`, currently always empty - see [§ Open Questions](#open-questions--explicitly-deferred)) · `is_up` (`isUp`, `bool`) · `is_loopback` (`isLoopback`, `bool`) |
 | `OperatingSystemInfo` | `name: str` · `version: str \| None` · `kernel: str \| None` · `architecture: str` |
 | `MemoryInfo` | `total_bytes` (`totalBytes`, optional) · `available_bytes` (`availableBytes`, optional) |
@@ -142,9 +168,11 @@ Field-level detail (types shown are the Python/Pydantic types; JSON keys are the
 |---|---|
 | `FrozenModel` / `FrozenExtensibleModel` | Enforce the subsystem's two structural guarantees (immutability; extra-field policy) in one place, so no individual model has to restate `model_config`. |
 | `HostInventory` | The aggregate root. Owns the top-level identity of a snapshot (`schema_version`, `collected_at`) and composes every section. The *only* model any adapter constructs directly. |
-| `HostIdentity`, `FirmwareInfo`, `OperatingSystemInfo`, `CpuInfo`, `MemoryInfo` | Value objects: each describes one bounded, single-valued fact area. No behavior beyond validation. |
-| `StorageDevice`, `NetworkInterface`, `ToolStatus` | Value objects describing one member of a *collection* of facts (zero or more devices/interfaces/tools). |
+| `HostIdentity`, `FirmwareInfo`, `OperatingSystemInfo`, `CpuInfo`, `MemoryInfo`, `EfiSystemPartition` | Value objects: each describes one bounded, single-valued fact area. No behavior beyond validation. |
+| `StorageDevice`, `UsbStorageDevice`, `NetworkInterface`, `ToolStatus` | Value objects describing one member of a *collection* of facts (zero or more devices/interfaces/tools). |
 | `SecureBootState` | Enumerates the only valid answers to "what is this firmware's Secure Boot state," including the two "I don't know" cases (`unsupported` vs. `unknown`) as first-class values rather than `None` - see the type's own docstring for why the distinction matters. |
+| `EfiSystemPartition` | A dedicated value object for the UEFI ESP, kept separate from both `FirmwareInfo` (which stays a firmware-only fact area) and `StorageDevice` (which models whole block devices, not partitions) - see [ADR-0008's amendment](decisions/0008-host-inventory-ports-and-adapters.md#amendment-efi-system-partition-and-usb-storage) for why the ESP needed its own model rather than being folded into either. |
+| `UsbStorageDevice` | Deliberately narrower than "USB devices" in general: models only USB-attached storage suitable for booting or deployment (e.g. a recovery USB drive), never keyboards, mice, webcams, or hubs - see the same ADR-0008 amendment for why generic USB enumeration was rejected as out of scope. |
 | `bcs.inventory.collectors.collect_*` (functions, not classes) | Each is a **pure-enough** (reads real files, does no writes, has no side effects a caller needs to know about), independently callable, independently testable probe for exactly one fact area. Deliberately plain functions, not a class hierarchy - see the note in [§ Proposed Changes](#proposed-changes-requiring-approval) on why a `Collector` protocol was considered and *not* recommended yet. |
 | `bcs.inventory.service.collect_host_inventory` | The one orchestration function. Owns the `collected_at` timestamp (so every section of one snapshot shares one collection instant) and is the only code that composes all collectors into a `HostInventory`. |
 | `bcs.commands.inventory.run_inventory` | The CLI adapter. Owns *all* formatting/printing for `bcs inventory`; contains no fact-collection logic itself. |
@@ -346,12 +374,14 @@ This is deliberately layered the same way the code is: model tests never touch c
 | Aspect | Status | Notes |
 |---|---|---|
 | Package structure | ✅ Implemented | Matches [§ Package Structure](#package-structure) exactly. |
-| Pydantic models | ✅ Implemented | Matches [§ Pydantic Models](#pydantic-models) exactly. |
-| Collectors | ✅ Implemented | Linux-oriented placeholders; degrade gracefully on other platforms (verified on Windows during development). |
+| Pydantic models (excluding `EfiSystemPartition`/`UsbStorageDevice`, see below) | ✅ Implemented | Matches [§ Pydantic Models](#pydantic-models) exactly. |
+| Collectors (excluding ESP/USB storage, see below) | ✅ Implemented | Linux-oriented placeholders; degrade gracefully on other platforms (verified on Windows during development). |
 | Service orchestration | ✅ Implemented | |
 | CLI adapter (`bcs inventory`) | ✅ Implemented | |
-| `bcs doctor` integration | ✅ Implemented | Refactored onto `inventory.collectors` in the same change that introduced this subsystem. |
+| `bcs doctor` integration (excluding `esp`/`usb-storage` checks, see below) | ✅ Implemented | Refactored onto `inventory.collectors` in the same change that introduced this subsystem. |
 | Unit tests | ✅ Implemented | See [§ Testing Strategy](#testing-strategy); 209 tests pass across the whole `cli/` package as of this writing. |
+| `EfiSystemPartition` model and `HostInventory.efiSystemPartition` field | 📝 Design accepted, not implemented | Schema decided per [ADR-0008's amendment](decisions/0008-host-inventory-ports-and-adapters.md#amendment-efi-system-partition-and-usb-storage); `collect_efi_system_partition()` and the `bcs doctor` `esp` check do not exist yet - awaiting implementation approval. |
+| `UsbStorageDevice` model and `HostInventory.usbStorage` field | 📝 Design accepted, not implemented | Schema decided per the same amendment; `collect_usb_storage()` and the `bcs doctor` `usb-storage` check do not exist yet - awaiting implementation approval. |
 | Collection-caveat reporting (e.g. distinguishing "no NVMe present" from "storage detection unsupported here") | 💡 Proposed | Not implemented - see [§ Proposed Changes](#proposed-changes-requiring-approval) item 1. |
 | Checked-in JSON Schema artifact | 💡 Proposed | Not implemented - item 2. |
 | Golden-file schema regression test | 💡 Proposed | Not implemented - item 3. |

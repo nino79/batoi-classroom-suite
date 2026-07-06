@@ -61,7 +61,7 @@ Detail: [docs/architecture/boot-manager.md](docs/architecture/boot-manager.md), 
 **Responsibility:** turn a declarative description of "what a classroom PC should be" into a versioned, reproducible disk image.
 
 - Consumes a declarative recipe — the `spec.builder`/`spec.packages` sections of the unified [BCS configuration](docs/CONFIGURATION.md) (package sets, configuration, branding, per-subject software) — targeting LliureX 23 on Ubuntu 24.04 LTS.
-- Produces a golden image in a format consumable by the deployment engine (Clonezilla / partclone-compatible partition images), including a correctly laid out UEFI ESP (EFI System Partition) for NVMe targets.
+- Produces a golden image in a format consumable by the deployment engine (Clonezilla / partclone-compatible partition images), including a correctly laid out UEFI ESP (EFI System Partition) for NVMe targets. The [Host Inventory subsystem](docs/HOST_INVENTORY.md)'s `efiSystemPartition` fact (`CLI-016`) is how BCS verifies, at runtime and on any machine, that this layout is actually present and mounted — independent of Builder's own build-time guarantee.
 - Is the single point where package versions, base OS version, and classroom customisation are pinned — so that two builds from the same recipe produce the same result.
 - Publishes build artifacts with a version identifier consistent with [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -99,7 +99,7 @@ flowchart TB
 | Interface | Producer | Consumer | Contract |
 |---|---|---|---|
 | Golden image artifact | Builder | Deploy | Versioned, checksummed image in a Clonezilla-compatible format; see [docs/specifications/builder.md](docs/specifications/builder.md) |
-| Deployed disk layout | Deploy | Boot Manager | Partition layout (ESP + root + recovery) that Boot Manager can discover at boot; see [docs/specifications/deploy.md](docs/specifications/deploy.md) |
+| Deployed disk layout | Deploy | Boot Manager | Partition layout (ESP + root + recovery) that Boot Manager can discover at boot; see [docs/specifications/deploy.md](docs/specifications/deploy.md). Verifiable independently of either component via the [Host Inventory subsystem](docs/HOST_INVENTORY.md)'s `efiSystemPartition` fact. |
 | Maintenance request | Boot Manager | Deploy | Trigger for re-imaging or joining a scheduled deployment session; see [docs/specifications/boot-manager.md](docs/specifications/boot-manager.md) |
 
 ## 5. Cross-Cutting Concerns

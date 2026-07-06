@@ -319,7 +319,7 @@ bcs doctor [--check <name>]... [--fix] [--strict] [--output text|json]
 | `--fix` | Attempt safe, reversible remediations only (e.g., installing a missing *optional* tool). Never performs destructive or system-level changes — those are reported, not applied. |
 | `--strict` | Treat `warn` results as failures for the purpose of the exit code. |
 
-**Checks:** `firmware` (UEFI present, `PLAT-003`), `secure-boot` (state vs. `spec.security.secureBoot.mode` if a config is loaded), `storage` (NVMe present, `PLAT-005`), `network` (PXE/multicast reachability, `PLAT-007` — Deploy hosts only), `tooling` (Clonezilla suite, `partclone`, a YAML/JSON-Schema processor present), `config` (a ClassroomConfig is resolvable and passes `bcs validate`), `permissions` (required device/privilege access).
+**Checks:** `firmware` (UEFI present, `PLAT-003`), `secure-boot` (state vs. `spec.security.secureBoot.mode` if a config is loaded), `esp` (EFI System Partition present and mounted, `BLD-004`/`DEP-003`/`CLI-016`), `storage` (NVMe present, `PLAT-005`), `usb-storage` (USB storage devices suitable for booting/deployment, `CLI-016`; informational — absence is not a failure), `network` (PXE/multicast reachability, `PLAT-007` — Deploy hosts only), `tooling` (Clonezilla suite, `partclone`, a YAML/JSON-Schema processor present), `config` (a ClassroomConfig is resolvable and passes `bcs validate`), `permissions` (required device/privilege access).
 
 **Exit codes:** `0` (all OK, or only warnings without `--strict`), `4` (any check `fail`, or any `warn` under `--strict`).
 

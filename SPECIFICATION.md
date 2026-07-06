@@ -76,6 +76,7 @@ The `bcs` command-line interface is the single operator entry point into Boot Ma
 | CLI-013 | `bcs` MUST support composable verbosity controls (`-v`/`-q`/`--log-level`) with a documented precedence. |
 | CLI-014 | Color output MUST default to auto-detection (TTY and `NO_COLOR` unset) and MUST be overridable via flags and environment variables. |
 | CLI-015 | `bcs` MUST expose a versioned, immutable Host Inventory snapshot (`bcs inventory`) as the single source of truth describing the current machine; Boot Manager, Builder, and Deploy MUST consume the identical JSON shape, never a bespoke re-probe of the same facts. |
+| CLI-016 | The Host Inventory snapshot (`CLI-015`) MUST report the EFI System Partition's presence, device/partition, filesystem, mount state, and size (see `BLD-004`, `DEP-003`), and MUST enumerate USB storage devices suitable for booting or deployment; it MUST NOT enumerate generic USB peripherals (keyboards, mice, webcams, hubs). |
 
 ## 3. Non-Functional Requirements
 
