@@ -1,6 +1,6 @@
 # EFI Adapter — Design Proposal (Firmware Boot Configuration, Host Discovery)
 
-> **Status: Accepted, pending implementation.** The architecture below (as amended during review — see [§ Amendments Incorporated](#amendments-incorporated-during-review)) is approved. **No code changes accompany this document.** Nothing under `cli/` has been touched; implementation remains gated on a separate, explicit go-ahead before any `.py` file is written, the same way [docs/PLATFORM_LAYER.md](PLATFORM_LAYER.md) and [docs/HOST_INVENTORY.md](HOST_INVENTORY.md) were approved before their own implementation began.
+> **Status: Accepted; models implemented.** The architecture below (as amended during review — see [§ Amendments Incorporated](#amendments-incorporated-during-review)) is approved. **Implemented so far: `BootEntry` and `FirmwareBootConfiguration`** (`cli/src/bcs/platform/adapters/efi/models.py`) — immutable, validated, JSON-serializable, with no parsing logic, no `subprocess`, no `CommandRunner`, no adapter, and no CLI integration, per this document's own module boundaries. **Not yet implemented:** `parser.py`, `adapter.py`, `errors.py`, and everything in [§ Adapter Responsibilities](#adapter-responsibilities)/[§ Error Mapping](#error-mapping) that depends on them — those remain gated on a separate, explicit go-ahead before any further `.py` file is written.
 
 ## Amendments Incorporated During Review
 
@@ -41,22 +41,26 @@ cli/src/bcs/platform/adapters/
 └── efi/                          # the EFI domain - see naming note below.
     │                              # NOT named "efibootmgr": the package survives
     │                              # a future backend swap (efivarfs, libefivar, ...)
-    ├── __init__.py                  # public surface: re-exports read_firmware_boot_configuration,
-    │                              # FirmwareBootConfiguration, BootEntry, and this
-    │                              # adapter's own exceptions
-    ├── models.py                    # BootEntry, FirmwareBootConfiguration (frozen, JSON-serializable)
-    ├── parser.py                    # parse_firmware_boot_configuration(text: str) ->
+    ├── __init__.py                  # [implemented] currently re-exports only
+    │                              # FirmwareBootConfiguration/BootEntry; will also
+    │                              # re-export read_firmware_boot_configuration and
+    │                              # this adapter's own exceptions once they exist
+    ├── models.py                    # [implemented] BootEntry, FirmwareBootConfiguration
+    │                              # (frozen, JSON-serializable) - see § Pydantic Models
+    ├── parser.py                    # [not yet implemented] parse_firmware_boot_configuration(text: str) ->
     │                              # FirmwareBootConfiguration - a pure function; see
     │                              # § Parser Architecture for its independence guarantees
-    ├── adapter.py                    # read_firmware_boot_configuration(runner: CommandRunner) -> ...
+    ├── adapter.py                    # [not yet implemented] read_firmware_boot_configuration(runner: CommandRunner) -> ...
     │                              # - the only place this package calls CommandRunner.run(),
     │                              # and the only place that knows the backend is efibootmgr
-    └── errors.py                    # FirmwareBootError(PlatformError) and its two subclasses
+    └── errors.py                    # [not yet implemented] FirmwareBootError(PlatformError) and its two subclasses
 ```
 
 **A structural refinement, flagged rather than silently done:** [docs/PLATFORM_LAYER.md § Package Structure](PLATFORM_LAYER.md#package-structure) shows adapters as flat files (`adapters/efibootmgr.py`, `adapters/lsblk.py`, ...). This design proposes organizing `efi` internally as a small subpackage instead, because it has enough internal structure to benefit from separation (a model schema, a pure parser, an I/O-performing adapter function, and adapter-specific exceptions — four concerns, not one). The **public import surface** is unaffected: `from bcs.platform.adapters.efi import read_firmware_boot_configuration, FirmwareBootConfiguration, BootEntry` works identically whether `efi` is a module or a package, since Python does not distinguish the two at the import-statement level. Nothing outside this adapter needs to know or care which it is. Other future adapters (`lsblk`, `blkid`, `mount`, `rsync` — still placeholder tool-names in `docs/PLATFORM_LAYER.md`, not yet individually designed or renamed) may or may not need the same treatment; that is each one's own design exercise, and each is also expected to receive a domain-appropriate name of its own under the rule in [§ Amendments Incorporated](#amendments-incorporated-during-review), item 4, when its turn comes — not decided here.
 
 ## Pydantic Models
+
+**Implemented** (`cli/src/bcs/platform/adapters/efi/models.py`; see `cli/tests/test_platform_adapters_efi_models.py` for the corresponding test coverage). Both models additionally validate the four-hexadecimal-digit boot-number format described in the field table below (`boot_number`, `current_boot_number`, `boot_next`, and every `boot_order` entry), and `FirmwareBootConfiguration` rejects `entries` containing duplicate `boot_number` values — both are narrow, direct implementations of constraints already implied by this document's own field descriptions, not new design decisions.
 
 ```mermaid
 classDiagram
@@ -203,6 +207,7 @@ BCS targets a fixed platform, not generic Linux ([SPECIFICATION.md §4](../SPECI
 
 | Layer | What it verifies | How |
 |---|---|---|
+| `models.BootEntry`/`models.FirmwareBootConfiguration` **(implemented)** | Construction, defaults, the boot-number-format and duplicate-entry validators, immutability, equality, hashability, and JSON serialization/deserialization round-tripping (including alias names) for both models. | Direct unit tests, no fixtures or mocking needed — see `cli/tests/test_platform_adapters_efi_models.py`. |
 | `parser.parse_firmware_boot_configuration` | Every line pattern in [§ Parser Architecture](#parser-architecture), individually and combined; permissive handling of unrecognized lines; an entry with no device-path segment; absent `Timeout`/`BootNext` lines. | Pure unit tests against **real, captured `efibootmgr -v` output** saved as text fixtures (proposed location: `cli/tests/fixtures/efi/*.txt`) — e.g. a single-boot Ubuntu system, a dual-boot Windows+Ubuntu system, a system with no `BootNext` set. These must be captured from a real machine or VM (or synthesized to precisely match real, documented `efibootmgr` output) by whoever implements this — not invented arbitrarily — since the entire point of this layer is confidence against real-world output, not against a parser author's own assumptions about it. No mocking needed, since the parser takes plain `text: str`; this is the highest-value layer and should be the majority of this adapter's tests. |
 | `adapter.read_firmware_boot_configuration` | Correct command (`["efibootmgr", "-v"]`), correct locale-forced `env`, correct explicit `timeout_seconds`, `check=False`, and that a successful result is handed off correctly to the parser. | `FakeCommandRunner` ([docs/PLATFORM_LAYER.md § Testing Strategy](PLATFORM_LAYER.md#testing-strategy) — itself not yet implemented, tracked there), programmed to return a `CommandResult` wrapping one of the same fixture texts as `stdout`. |
 | Error mapping | Each condition in [§ Error Mapping](#error-mapping) maps to the right exception. | `FakeCommandRunner` programmed to return/raise the corresponding failure shape (a non-zero `CommandResult` with "not supported"-style `stderr`; a zero-exit `CommandResult` with garbage `stdout`; letting `CommandNotFoundError`/`CommandTimeoutError` pass through unchanged from a fake that raises them directly). |
