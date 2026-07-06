@@ -16,11 +16,17 @@ Domain and technical terms used throughout BCS documentation, in alphabetical or
 
 **Deploy** — the BCS component that distributes golden images to a classroom fleet and verifies the result. See [docs/architecture/deploy.md](architecture/deploy.md).
 
+**EFI Adapter** — BCS's read-only Platform Layer adapter for firmware boot configuration, `bcs.platform.adapters.efi` — domain-named rather than named after `efibootmgr`, the tool it currently wraps (see [docs/standards/naming-conventions.md § Domain-Driven Naming](standards/naming-conventions.md#domain-driven-naming)), so a future backend swap would not require a public rename. See [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) and [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md).
+
+**efibootmgr** — the standard Linux tool for inspecting (and, in general, managing) UEFI NVRAM boot variables; BCS's EFI Adapter currently wraps it, read-only. See [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) and [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md).
+
 **ESP (EFI System Partition)** — a FAT-formatted partition required by UEFI firmware to locate and launch bootloaders. BCS's disk layout requirements (`BLD-004`, `DEP-003`) centre on correctly building and restoring this partition on NVMe targets.
 
 **Golden Image** — the versioned, checksummed disk image produced by Builder that represents "what a classroom PC should be." Deployed identically across a fleet by Deploy.
 
 **GPT (GUID Partition Table)** — the partition table format required for UEFI boot, used instead of legacy MBR partitioning.
+
+**Host Discovery** — the broader effort of read-only Platform Layer adapters that inspect the host system via external tools (starting with the EFI Adapter) rather than parsing `/proc`/`/sys` directly. See [docs/EFI_ADAPTER.md](EFI_ADAPTER.md).
 
 **Host Inventory** — the immutable, versioned snapshot of a single machine's hardware/software facts (firmware, storage, network, identity, OS, CPU, memory, tooling), produced by `bcs inventory` and intended as the single source of truth consumed by `bcs doctor` and, eventually, Boot Manager, Builder, and Deploy. See [docs/HOST_INVENTORY.md](HOST_INVENTORY.md) and [ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md).
 

@@ -42,5 +42,6 @@ You do not need an ADR for routine documentation fixes, wording clarifications, 
 | [0007](0007-python-for-the-bcs-cli.md) | Python (Typer/Rich/Pydantic/PyYAML) for the `bcs` CLI, superseding Bash for this component | Accepted |
 | [0008](0008-host-inventory-ports-and-adapters.md) | Host Inventory as an immutable, ports-and-adapters core domain | Accepted |
 | [0009](0009-platform-layer-command-runner.md) | Platform Layer as the sole path to process execution | Accepted |
+| [0010](0010-efi-adapter-read-only-scope.md) | EFI adapter — read-only, domain-named firmware boot configuration integration | Accepted |
 
 This index should be kept in sync with the files in this directory whenever an ADR is added or its status changes.

@@ -12,6 +12,27 @@ A single reference for every naming rule used across BCS, so a rule is defined o
 | Directories | `kebab-case` | `boot-manager/`, `docs/specifications/` |
 | Bash scripts | `kebab-case.sh` | `build-golden-image.sh` |
 
+## Domain-Driven Naming
+
+**Rule:** Packages, adapters, and Pydantic models are named after the business/domain concept they represent, never after the implementation technology behind them.
+
+This applies most concretely to `bcs.platform.adapters.*` (Platform Layer adapters wrapping external tools — see [docs/PLATFORM_LAYER.md](../PLATFORM_LAYER.md)) and to the models they produce:
+
+| Instead of (implementation-technology name) | Use (domain name) | Why |
+|---|---|---|
+| `bcs.platform.adapters.efibootmgr` | `bcs.platform.adapters.efi` | The package represents the EFI domain, not the current backend tool. A future reimplementation (`efivarfs`, `libefivar`, or anything else) can replace `efibootmgr` internally without a public rename. |
+| `EfiBootConfiguration` | `FirmwareBootConfiguration` | Names the firmware fact the model represents, not the tool that reported it — and avoids colliding with the *different*, already-existing concept of Boot Manager's own menu configuration (`spec.bootManager.menu`). |
+| `EfibootmgrError` / `EfibootmgrParseError` | `FirmwareBootError` / `FirmwareBootParseError` | An error about firmware boot data, not about a specific CLI tool having failed. |
+
+**Rationale:**
+
+- **Adapters exist precisely so the rest of the codebase doesn't need to know which tool is behind them** ([docs/PLATFORM_LAYER.md § Purpose](../PLATFORM_LAYER.md#purpose)). A tool-named package undermines its own reason for existing — every caller's import statement would encode an implementation detail the adapter was supposed to hide.
+- **Tool choices are more volatile than domain concepts.** `efibootmgr` could be replaced by a different mechanism for reading UEFI NVRAM variables; "the EFI domain" does not change when that happens. Naming things after what changes less keeps a rename out of the critical path when an implementation swap does happen.
+- **Domain names carry meaning to a reader who has never heard of the specific tool.** `FirmwareBootConfiguration` is understandable to someone who has never run `efibootmgr`; `EfiBootConfiguration`-tied-to-`efibootmgr` requires that context.
+- This does **not** mean the tool disappears from the documentation or code — describing *which* tool an adapter currently wraps, and that tool's specific version/flag/output quirks, remains necessary, factual, implementation detail (see, e.g., [docs/EFI_ADAPTER.md § Supported `efibootmgr` Versions](../EFI_ADAPTER.md#supported-efibootmgr-versions)). The rule is about the **public names** (packages, classes, functions other code imports), not about erasing the tool from prose or from the one module (`adapter.py`, by Platform Layer convention) that actually knows it.
+
+First applied in [ADR-0010](../decisions/0010-efi-adapter-read-only-scope.md); see [docs/EFI_ADAPTER.md § Pydantic Models](../EFI_ADAPTER.md#pydantic-models) for a worked example of the naming decision, including a real naming collision it avoids.
+
 ## Requirement IDs
 
 Fixed prefixes, defined in [SPECIFICATION.md](../../SPECIFICATION.md) — do not introduce a new prefix without updating that document:

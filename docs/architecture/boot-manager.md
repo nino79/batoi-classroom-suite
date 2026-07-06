@@ -60,6 +60,6 @@ Branding (logos, icons, backgrounds, fonts — see [assets/README.md](../../asse
 
 These are flagged here rather than silently assumed; resolving them is expected to happen via ADRs during [Phase 1](../../ROADMAP.md#phase-1--boot-manager-design-validation):
 
-- Exact mechanism for UEFI NVRAM boot entry management across the range of OEM firmware found in classroom hardware (`BM-003`) — reliability varies significantly by vendor.
+- Exact mechanism for UEFI NVRAM boot entry management across the range of OEM firmware found in classroom hardware (`BM-003`) — reliability varies significantly by vendor. A read-only inspection step (the EFI Adapter, `bcs.platform.adapters.efi` — see [docs/EFI_ADAPTER.md](../EFI_ADAPTER.md) and [ADR-0010](../decisions/0010-efi-adapter-read-only-scope.md), design accepted, not yet implemented) is intended to precede any *write*/management capability, so real boot-entry data can be observed across real hardware first; it does not itself resolve this question.
 - Precise format and transport of the maintenance request (`BM-006`) — this is a joint interface with Deploy and should be decided jointly.
 - Secure Boot posture: ship a signed boot chain vs. document a supported "Secure Boot disabled" deployment mode (`PLAT-004`).

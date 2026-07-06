@@ -109,6 +109,7 @@ flowchart TB
 - **Observability.** Deploy must produce per-machine, per-session logs/reports usable by a single technician managing many classrooms; this is a non-functional requirement, not an afterthought.
 - **Hardware scope.** All three components target UEFI + NVMe as the primary supported hardware profile. Legacy BIOS and spinning-disk support are explicitly out of scope for v1.0 (see [SPECIFICATION.md](SPECIFICATION.md)).
 - **OS interaction.** BCS's Python code (`cli/`) centralizes all process execution behind a Platform Layer (`bcs.platform`, see [docs/PLATFORM_LAYER.md](docs/PLATFORM_LAYER.md) and [ADR-0009](docs/decisions/0009-platform-layer-command-runner.md), Accepted; core and `RuntimeContext` wiring implemented, not yet consumed by any collector/command) — business/command code never calls `subprocess` directly (`NFR-008`).
+- **Domain-driven naming.** Packages, adapters, and Pydantic models are named after the business/domain concept they represent, never after the implementation technology behind them (e.g. `bcs.platform.adapters.efi`, not `.efibootmgr`) — see [docs/standards/naming-conventions.md](docs/standards/naming-conventions.md#domain-driven-naming) and [ADR-0010](docs/decisions/0010-efi-adapter-read-only-scope.md).
 
 ## 6. What BCS Is Not
 
@@ -129,6 +130,7 @@ Significant, hard-to-reverse decisions are recorded as ADRs in [docs/decisions/]
 - [ADR-0007 — Python for the `bcs` CLI, superseding Bash for this component](docs/decisions/0007-python-for-the-bcs-cli.md)
 - [ADR-0008 — Host Inventory as an immutable, ports-and-adapters core domain](docs/decisions/0008-host-inventory-ports-and-adapters.md)
 - [ADR-0009 — Platform Layer as the sole path to process execution](docs/decisions/0009-platform-layer-command-runner.md)
+- [ADR-0010 — EFI adapter: read-only, domain-named firmware boot configuration integration](docs/decisions/0010-efi-adapter-read-only-scope.md)
 
 ## 8. Operator Interface
 

@@ -104,6 +104,7 @@ batoi-classroom-suite/
 │   ├── CONFIGURATION.md      # Field-by-field reference for config/schema.yaml
 │   ├── HOST_INVENTORY.md     # Host Inventory subsystem design (ADR-0008, Accepted)
 │   ├── PLATFORM_LAYER.md     # Platform Layer / CommandRunner design (ADR-0009, Accepted)
+│   ├── EFI_ADAPTER.md        # EFI Adapter (bcs.platform.adapters.efi) design (ADR-0010, Accepted)
 │   └── repository-organization.md  # This file
 │
 ├── assets/                   # Shared branding assets (logos, icons, fonts, backgrounds)

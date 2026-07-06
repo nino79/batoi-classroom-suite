@@ -22,6 +22,10 @@ Per `NFR-007`, re-running an operation against a target already at the desired s
 - Builder operations given the same recipe and pinned inputs should be safely re-runnable without manual cleanup between runs (supports `BLD-005`, reproducibility).
 - Boot Manager configuration changes should be safe to apply repeatedly (e.g., re-registering a UEFI boot entry that already exists, per `BM-003`, must not create duplicates).
 
+## Domain-Driven Naming
+
+**Packages, adapters, and Pydantic models are named after the business/domain concept they represent, never after the implementation technology behind them** — e.g. `bcs.platform.adapters.efi` and `FirmwareBootConfiguration`, not `.efibootmgr`/`EfiBootConfiguration`. This keeps a swappable implementation choice (which specific tool an adapter currently shells out to) from leaking into public names that the rest of the codebase, and future contributors unfamiliar with that specific tool, depend on. Full rule, rationale, and a worked example: [docs/standards/naming-conventions.md § Domain-Driven Naming](naming-conventions.md#domain-driven-naming). First applied in [ADR-0010](../decisions/0010-efi-adapter-read-only-scope.md).
+
 ## OS Interaction (Python Components)
 
 **Direct use of `subprocess.run()`, `subprocess.Popen()`, or equivalent (`os.system`, `os.popen`, `os.exec*`) outside `bcs.platform` is forbidden.** This is a hard prohibition, not a style preference: every external process `cli/`'s code spawns MUST go through the Platform Layer's `CommandRunner` (`NFR-008`) — the one seam where OS interaction is centralized, logged, and timeout-bounded. See [docs/PLATFORM_LAYER.md](../PLATFORM_LAYER.md) and [ADR-0009](../decisions/0009-platform-layer-command-runner.md).
