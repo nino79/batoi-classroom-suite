@@ -32,6 +32,7 @@ from bcs.context import RuntimeContext
 from bcs.exit_codes import ExitCode
 from bcs.logging_setup import LogFormat, LogLevelOption, configure_logging, resolve_log_level
 from bcs.output import OutputFormat
+from bcs.platform.execution import SubprocessCommandRunner
 from bcs.plugins import find_plugin, run_plugin, suggest_command
 from bcs.ulid import new_ulid
 
@@ -193,6 +194,11 @@ def main(  # noqa: PLR0913 - global options are inherently numerous; see docs/CL
         env=dict(os.environ),
     )
 
+    # Built once per invocation and threaded through RuntimeContext, exactly
+    # like every other collaborator here - never a module-level singleton or
+    # service locator. See docs/PLATFORM_LAYER.md#dependency-injection.
+    command_runner = SubprocessCommandRunner()
+
     ctx.obj = RuntimeContext(
         invocation_id=invocation_id,
         console=console,
@@ -207,6 +213,7 @@ def main(  # noqa: PLR0913 - global options are inherently numerous; see docs/CL
         timeout=timeout,
         config_loader=loader,
         preferences=preferences,
+        command_runner=command_runner,
     )
 
     if ctx.invoked_subcommand is None:

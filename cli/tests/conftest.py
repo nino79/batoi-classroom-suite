@@ -98,6 +98,7 @@ def make_runtime_context():
     from bcs.context import RuntimeContext
     from bcs.logging_setup import LogFormat, LogLevel
     from bcs.output import OutputFormat
+    from bcs.platform.execution import CommandRunner, SubprocessCommandRunner
 
     def _factory(
         *,
@@ -105,6 +106,7 @@ def make_runtime_context():
         output: OutputFormat = OutputFormat.TEXT,
         set_overrides: list[str] | None = None,
         env: dict[str, str] | None = None,
+        command_runner: CommandRunner | None = None,
     ) -> RuntimeContext:
         console = Console(
             file=io.StringIO(), no_color=True, force_terminal=False, width=120, soft_wrap=True
@@ -131,6 +133,9 @@ def make_runtime_context():
             timeout=None,
             config_loader=loader,
             preferences=CliPreferences(),
+            command_runner=(
+                command_runner if command_runner is not None else SubprocessCommandRunner()
+            ),
         )
 
     return _factory

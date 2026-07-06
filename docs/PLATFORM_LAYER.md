@@ -1,6 +1,6 @@
 # Platform Layer — Design Proposal (Command Runner)
 
-> **Status: Accepted, pending implementation.** The architecture below (as amended during review — see [§ Amendments Incorporated](#amendments-incorporated-during-review)) is approved. **No code changes accompany this document.** Nothing under `cli/` has been touched; implementation remains gated on a separate, explicit go-ahead before any `.py` or `pyproject.toml` file is written, exactly as [docs/HOST_INVENTORY.md](HOST_INVENTORY.md)'s design was approved before its own implementation began.
+> **Status: Accepted; partially implemented.** The architecture below (as amended during review — see [§ Amendments Incorporated](#amendments-incorporated-during-review)) is approved. Implemented so far: `CommandResult` (Platform-001 Part 1), the `PlatformError` exception hierarchy (Part 2), `CommandRunner`/`SubprocessCommandRunner` (Part 3), and `RuntimeContext` dependency injection (Part 4 — see [§ Dependency Injection](#dependency-injection)). Not yet implemented: the Ruff enforcement scoping (item 3 below), `FakeCommandRunner`, the `FrozenModel` relocation, and every adapter (`efibootmgr`, `lsblk`, `blkid`, `mount`, `rsync`) — none of `bcs.inventory`, `bcs.commands`, or any other existing code calls into the Platform Layer yet; only the wiring exists.
 
 ## Amendments Incorporated During Review
 
@@ -64,7 +64,7 @@ A **naming note, flagged rather than decided silently**: naming this package `bc
 
 ### Enforcement
 
-"Business code MUST NEVER call `subprocess` directly" is documented today only as a docstring convention for `bcs.plugins` (see its own `# noqa` comments in `cli/pyproject.toml`: `S603`/`S607` are currently ignored *repository-wide*). Now that this architecture is approved, that blanket ignore is confirmed to narrow to apply **only** to `bcs.plugins` (the reviewed passthrough-I/O exception — see [§ Relationship to Existing Code](#relationship-to-existing-code)) and `cli/src/bcs/platform/execution.py` (via Ruff's `[tool.ruff.lint.per-file-ignores]`, the same mechanism already used to scope `T20` — "no leftover `print()`" — to `src/bcs/commands/*`). Every other module regains Bandit's `S603`/`S607` subprocess-call warnings at full strength, so an accidental `import subprocess` anywhere else in `cli/src/bcs/` fails CI lint the moment it's written — a mechanical guardrail, not just a reviewed convention. This is listed under [§ Approved Design Decisions](#approved-design-decisions-pending-implementation) — the decision itself is settled; the `pyproject.toml` edit is still pending implementation, per this document's status banner.
+"Business code MUST NEVER call `subprocess` directly" is documented today only as a docstring convention for `bcs.plugins` (see its own `# noqa` comments in `cli/pyproject.toml`: `S603`/`S607` are currently ignored *repository-wide*). Now that this architecture is approved, that blanket ignore is confirmed to narrow to apply **only** to `bcs.plugins` (the reviewed passthrough-I/O exception — see [§ Relationship to Existing Code](#relationship-to-existing-code)) and `cli/src/bcs/platform/execution.py` (via Ruff's `[tool.ruff.lint.per-file-ignores]`, the same mechanism already used to scope `T20` — "no leftover `print()`" — to `src/bcs/commands/*`). Every other module regains Bandit's `S603`/`S607` subprocess-call warnings at full strength, so an accidental `import subprocess` anywhere else in `cli/src/bcs/` fails CI lint the moment it's written — a mechanical guardrail, not just a reviewed convention. This is listed under [§ Approved Design Decisions](#approved-design-decisions) — the decision itself is settled; the `pyproject.toml` edit is still pending implementation, per this document's status banner.
 
 ## CommandRunner API
 
@@ -175,12 +175,25 @@ The Platform Layer logs through the **same shared logger** every other `bcs` mod
 
 ## Dependency Injection
 
-`RuntimeContext` (the CLI's existing dependency-injection container — see [`context.py`](../cli/src/bcs/context.py)) gains a `command_runner: CommandRunner` field, built once in `bcs.app`'s root Typer callback as a `SubprocessCommandRunner()` instance — exactly the same treatment already given to `console`, `config_loader`, and `preferences`. This is listed under [§ Approved Design Decisions](#approved-design-decisions-pending-implementation), since it edits `context.py`/`app.py` and is therefore code, not touched in this documentation-only pass.
+**Implemented (Platform-001 Part 4).** `RuntimeContext` (the CLI's existing dependency-injection container — see [`context.py`](../cli/src/bcs/context.py)) carries a `command_runner: CommandRunner` field, built once in `bcs.app`'s root Typer callback as a `SubprocessCommandRunner()` instance and passed into `RuntimeContext(...)` as a constructor argument — exactly the same treatment already given to `console`, `config_loader`, and `preferences`.
+
+### Ownership and Lifecycle
+
+- **Who constructs it:** `bcs.app.main()` — the composition root — and nowhere else. No other module imports or instantiates `SubprocessCommandRunner`.
+- **When:** once per `bcs` process invocation, during application startup, before any subcommand runs — the same point `console`, `config_loader`, and `preferences` are already built.
+- **Who owns it:** `RuntimeContext` holds the single reference for the lifetime of the invocation. Because `RuntimeContext` is a frozen `dataclass`, nothing downstream can reassign `command_runner` to a different object once constructed — the reference `RuntimeContext` carries *is* the one every consumer for the rest of that invocation sees, by Python's own object-reference semantics, not by any extra bookkeeping.
+- **How consumers obtain it:** as an explicit constructor/function parameter, passed down from `RuntimeContext` — never via a module-level global, a lazily-created default, or a lookup-by-name/type ("service locator"). There is exactly one instance per invocation; nothing creates a second one, and nothing needs to, since `RuntimeContext` itself is only ever built once and its `ctx.obj` reference is what every command function already receives (see `bcs.app`'s existing dispatch, unchanged by this integration).
+- **Testing:** `cli/tests/conftest.py`'s `make_runtime_context` fixture accepts an optional `command_runner` override, defaulting to a real `SubprocessCommandRunner()` when omitted — so tests can inject a custom double (a hand-written fake, or a future shared `FakeCommandRunner`) without monkeypatching module state, the same DI-based testing philosophy `RuntimeContext` already documents for its other collaborators.
+- **What this integration deliberately does not do:** no existing command was changed to actually *call* `command_runner.run(...)` — `bcs doctor`, `bcs inventory`, and every other command behave exactly as before. This is dependency injection only; wiring a business service (a collector, a doctor check) to actually use the injected runner is separate, future work.
 
 Any command or future adapter that needs to run an external tool receives the runner as an explicit parameter — never by importing a module-level default, never by constructing its own `SubprocessCommandRunner()` inline. This is what makes [§ Testing Strategy](#testing-strategy)'s `FakeCommandRunner` substitution possible without monkeypatching module state, matching `RuntimeContext`'s own stated design goal.
 
 ```mermaid
 flowchart TB
+    subgraph AppStartup["bcs.app.main() - composition root, runs once per invocation"]
+        Startup["construct SubprocessCommandRunner()\n(the one default instance for this invocation)"]
+    end
+
     subgraph Core["Core - bcs.platform (no Typer/Rich, no bcs.errors, the only\nmodule that imports subprocess)"]
         Models["platform.models\nCommandResult"]
         Errors["platform.errors\nPlatformError hierarchy"]
@@ -202,7 +215,7 @@ flowchart TB
     end
 
     subgraph Shared["Shared infrastructure"]
-        Context["context.RuntimeContext\ncommand_runner field (approved, not implemented)"]
+        Context["context.RuntimeContext\ncommand_runner field (implemented, Part 4)\nowns the single instance for the invocation"]
         Logging["logging_setup.get_logger()"]
     end
 
@@ -220,6 +233,7 @@ flowchart TB
     Inventory -.optional future dependency.-> Blkid
     Doctor -.optional future dependency.-> Efi
 
+    Startup --> Context
     Context --> Execution
 ```
 
@@ -273,15 +287,15 @@ This sequence is illustrative of the *shape* of the integration only. It implies
 - **`bcs.plugins.run_plugin`** already calls `subprocess.run` directly, and is a **deliberate, reviewed exception**, not an oversight to fix by routing it through `CommandRunner`. Plugin dispatch wants full **passthrough** I/O — the child inherits the parent's real stdin/stdout/stderr, so an interactive plugin (one that itself prompts the user) works correctly. `CommandRunner` is built around **captured** output for structured parsing (the adapter use case), a genuinely different contract. Forcing plugin dispatch through `CommandRunner` would mean either weakening `CommandRunner`'s captured-output guarantee or bolting on a passthrough mode it doesn't otherwise need. This document confirms `bcs.plugins` stays as it is, with its existing `S603`/`S607` review comment narrowed (see [§ Enforcement](#enforcement)) to remain valid for this one file specifically, rather than repository-wide.
 - **`bcs.inventory.collectors`** is the nearest and most natural future consumer, closing two gaps it already documents itself: IP address enumeration (currently always empty — "isn't portable without... shelling out to `ip`/`ifconfig`") and Secure Boot byte-value parsing (currently always `unknown`). Neither is resolved by this document — see [§ Open Questions](#open-questions--explicitly-deferred).
 
-## Approved Design Decisions (Pending Implementation)
+## Approved Design Decisions
 
-The architecture is approved. None of the following are implemented yet — they remain gated on a separate, explicit go-ahead per this document's status banner, but the *design* choice itself is settled, not open for further debate:
+The architecture is approved. Status per item, updated as implementation proceeds (Platform-001 Parts 1–4):
 
-1. **Create `cli/src/bcs/platform/` per [§ Package Structure](#package-structure)**: `models.py` (`CommandResult`), `errors.py` (the exception hierarchy), `execution.py` (`CommandRunner` Protocol + `SubprocessCommandRunner`).
-2. **Add `command_runner: CommandRunner` to `RuntimeContext`**, constructed in `bcs.app`'s root callback.
-3. **Narrow `cli/pyproject.toml`'s `S603`/`S607` Ruff ignores** from repository-wide to `src/bcs/plugins.py` and `src/bcs/platform/execution.py` only (mirroring the existing `T20` per-file scoping), so any future accidental `import subprocess` outside those two files fails lint.
-4. **Add a `FakeCommandRunner` test double** under `cli/tests/` for future adapter tests to share.
-5. **Relocate `FrozenModel`/`FrozenExtensibleModel`** (currently defined only in `bcs.inventory.models`) to `bcs.model_utils`, so `bcs.platform.models.CommandResult` can reuse them instead of duplicating an identical base class.
+1. ✅ **Implemented.** `cli/src/bcs/platform/` per [§ Package Structure](#package-structure): `models.py` (`CommandResult`, Part 1), `errors.py` (the exception hierarchy, Part 2), `execution.py` (`CommandRunner` Protocol + `SubprocessCommandRunner`, Part 3).
+2. ✅ **Implemented (Part 4).** `command_runner: CommandRunner` added to `RuntimeContext`, constructed once in `bcs.app`'s root callback as a `SubprocessCommandRunner()` — see [§ Dependency Injection](#dependency-injection) for ownership/lifecycle detail. No existing command's behavior changed.
+3. 💤 **Not yet implemented.** Narrow `cli/pyproject.toml`'s `S603`/`S607` Ruff ignores from repository-wide to `src/bcs/plugins.py` and `src/bcs/platform/execution.py` only (mirroring the existing `T20` per-file scoping), so any future accidental `import subprocess` outside those two files fails lint.
+4. 💤 **Not yet implemented.** Add a `FakeCommandRunner` test double under `cli/tests/` for future adapter tests to share.
+5. 💤 **Not yet implemented.** Relocate `FrozenModel`/`FrozenExtensibleModel` (currently defined only in `bcs.inventory.models`) to `bcs.model_utils`, so `bcs.platform.models.CommandResult` can reuse them instead of duplicating an identical base class. (`CommandResult` currently defines its own equivalent `model_config` directly, per the Part 1 implementation.)
 
 ## Open Questions / Explicitly Deferred
 

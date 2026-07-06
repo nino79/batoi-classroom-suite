@@ -108,7 +108,7 @@ flowchart TB
 - **Localisation.** LliureX serves a bilingual (Valencian/Spanish) audience; Boot Manager's UI and Builder's default recipe must support both, with English as the documentation and code-comment language.
 - **Observability.** Deploy must produce per-machine, per-session logs/reports usable by a single technician managing many classrooms; this is a non-functional requirement, not an afterthought.
 - **Hardware scope.** All three components target UEFI + NVMe as the primary supported hardware profile. Legacy BIOS and spinning-disk support are explicitly out of scope for v1.0 (see [SPECIFICATION.md](SPECIFICATION.md)).
-- **OS interaction.** BCS's Python code (`cli/`) centralizes all process execution behind a Platform Layer (`bcs.platform`, see [docs/PLATFORM_LAYER.md](docs/PLATFORM_LAYER.md) and [ADR-0009](docs/decisions/0009-platform-layer-command-runner.md), Accepted, not yet implemented) — business/command code never calls `subprocess` directly (`NFR-008`).
+- **OS interaction.** BCS's Python code (`cli/`) centralizes all process execution behind a Platform Layer (`bcs.platform`, see [docs/PLATFORM_LAYER.md](docs/PLATFORM_LAYER.md) and [ADR-0009](docs/decisions/0009-platform-layer-command-runner.md), Accepted; core and `RuntimeContext` wiring implemented, not yet consumed by any collector/command) — business/command code never calls `subprocess` directly (`NFR-008`).
 
 ## 6. What BCS Is Not
 

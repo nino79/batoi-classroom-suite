@@ -5,8 +5,9 @@
 Every command function receives it as a constructor argument rather
 than reaching for globals, ``os.environ``, or `sys.argv` itself - the
 context is the single seam through which every collaborator (console,
-logger, config loader, preferences) is injected, so commands stay unit
-testable without patching module state.
+logger, config loader, preferences, the Platform Layer's
+``CommandRunner``) is injected, so commands stay unit testable without
+patching module state.
 """
 
 from __future__ import annotations
@@ -20,11 +21,21 @@ from bcs.config.loader import ConfigLoader
 from bcs.config.preferences import CliPreferences
 from bcs.logging_setup import LogFormat, LogLevel
 from bcs.output import OutputFormat
+from bcs.platform.execution import CommandRunner
 
 
 @dataclass(frozen=True)
 class RuntimeContext:
-    """Everything a command needs, resolved once at startup."""
+    """Everything a command needs, resolved once at startup.
+
+    ``command_runner`` is the single Platform Layer seam every future
+    service must obtain its :class:`~bcs.platform.execution.CommandRunner`
+    through - see ``docs/PLATFORM_LAYER.md#dependency-injection``. It is
+    built once, in ``bcs.app``'s root callback, and reused for the
+    lifetime of the invocation, exactly like every other collaborator
+    on this dataclass; there is no module-level singleton or service
+    locator anywhere in the Platform Layer.
+    """
 
     invocation_id: str
     console: Console
@@ -39,6 +50,7 @@ class RuntimeContext:
     timeout: str | None
     config_loader: ConfigLoader
     preferences: CliPreferences
+    command_runner: CommandRunner
 
 
 __all__ = ["RuntimeContext"]
