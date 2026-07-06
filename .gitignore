@@ -1,9 +1,15 @@
+# Editor / OS
 .vscode
+.idea
+Thumbs.db
+.DS_Store
 
+# Logs and temp files
 *.log
-
 *.tmp
 
-Thumbs.db
-
-.DS_Store
+# Build artifacts (Builder output, Deploy session data) — not committed to the repo
+*.iso
+*.img
+*.qcow2
+/builder/output/

@@ -1,0 +1,58 @@
+name: Feature Request
+description: Propose new functionality or a change in scope for a BCS component.
+title: "[Feature]: "
+labels:
+  - "type: feature"
+  - "status: triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before proposing a feature, please check [SPECIFICATION.md](../../SPECIFICATION.md) and [ROADMAP.md](../../ROADMAP.md) to see whether it's already planned, and [docs/decisions/](../../docs/decisions/) to see whether it was already considered. Proposals that change architecture, component boundaries, or platform scope are usually best framed as an ADR (see [CONTRIBUTING.md](../../CONTRIBUTING.md#proposing-an-adr)) rather than a feature request.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - Boot Manager
+        - Builder
+        - Deploy
+        - Cross-component / architecture
+        - Documentation
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the classroom/operational problem, not just the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see happen? Reference existing requirement IDs (e.g. DEP-004) if this refines or extends one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: scope-check
+    attributes:
+      label: Scope check
+      options:
+        - label: I've checked this isn't already covered by an existing requirement in SPECIFICATION.md
+          required: false
+        - label: I've checked this isn't already rejected or decided in an existing ADR under docs/decisions/
+          required: false

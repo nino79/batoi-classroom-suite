@@ -1,0 +1,47 @@
+name: Documentation Issue
+description: Report a gap, ambiguity, or error in BCS's architecture, specification, or guides.
+title: "[Docs]: "
+labels:
+  - "type: documentation"
+  - "status: triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Since BCS is currently in its documentation/architecture phase, this template is one of the most important ways to contribute. Use it for anything from a broken link to a substantive gap in the specification.
+
+  - type: dropdown
+    id: doc-area
+    attributes:
+      label: Which document or area?
+      options:
+        - README.md
+        - ARCHITECTURE.md
+        - SPECIFICATION.md
+        - ROADMAP.md
+        - CONTRIBUTING.md
+        - AGENTS.md
+        - docs/architecture/
+        - docs/specifications/
+        - docs/decisions/ (ADRs)
+        - docs/guides/
+        - docs/glossary.md
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What's wrong or missing?
+      description: Quote the relevant section if possible, or link to it directly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
+      description: If you already have wording or a structural suggestion, include it here.
+    validations:
+      required: false

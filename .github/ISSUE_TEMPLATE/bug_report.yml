@@ -1,0 +1,62 @@
+name: Bug Report
+description: Report a defect in an existing BCS component, script, or piece of documentation.
+title: "[Bug]: "
+labels:
+  - "type: bug"
+  - "status: triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. During the current documentation/architecture phase (see [ROADMAP.md](../../ROADMAP.md)), "bugs" are most often inconsistencies, broken links, or contradictions between documents rather than runtime defects — that's fine, please still use this template.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      description: Which part of BCS does this bug affect?
+      options:
+        - Boot Manager
+        - Builder
+        - Deploy
+        - Documentation (architecture / specification / guides)
+        - Repository tooling (.github, templates, labels)
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug.
+      placeholder: Tell us what you saw.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: For documentation issues, this can be "open document X, read section Y." For implemented components, include exact steps, hardware, and versions.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links to related documents, ADRs, requirement IDs (e.g. BM-004), or screenshots.
+    validations:
+      required: false

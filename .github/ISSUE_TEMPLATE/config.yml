@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a Question
+    url: https://github.com/nino79/batoi-classroom-suite/discussions
+    about: Use GitHub Discussions for questions that aren't a bug report or a concrete feature proposal.
+  - name: Report a Security Vulnerability
+    url: https://github.com/nino79/batoi-classroom-suite/security/advisories/new
+    about: Please do not report security vulnerabilities through public GitHub issues. See SECURITY.md.

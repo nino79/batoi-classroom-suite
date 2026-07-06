@@ -1,0 +1,29 @@
+# BCS Documentation
+
+This directory contains the detailed documentation for Batoi Classroom Suite (BCS). The top-level [ARCHITECTURE.md](../ARCHITECTURE.md) and [SPECIFICATION.md](../SPECIFICATION.md) are the normative entry points; everything here expands on them per component.
+
+## Contents
+
+| Section | Purpose |
+|---|---|
+| [architecture/](architecture/) | Per-component architecture deep-dives: responsibilities, internal design, interfaces, Mermaid diagrams. |
+| [specifications/](specifications/) | Per-component functional requirements, expanding [SPECIFICATION.md](../SPECIFICATION.md). |
+| [decisions/](decisions/) | Architecture Decision Records (ADRs) — the durable "why" behind hard-to-reverse choices. |
+| [standards/](standards/) | Coding, Bash, Markdown, and naming conventions. |
+| [processes/](processes/) | Development workflow and release process. |
+| [guides/](guides/) | Practical, contributor-facing guides: getting started, FAQ. |
+| [glossary.md](glossary.md) | Definitions for domain terms (LliureX, UEFI, ESP, Clonezilla, etc.) used throughout the docs. |
+| [repository-organization.md](repository-organization.md) | Canonical explanation of the whole repository's folder structure. |
+
+## Reading Order
+
+If you're new to the project, read in this order:
+
+1. [README.md](../README.md) — what BCS is and why it exists.
+2. [ARCHITECTURE.md](../ARCHITECTURE.md) — the system design.
+3. [SPECIFICATION.md](../SPECIFICATION.md) — the requirements.
+4. [glossary.md](glossary.md) — as needed, for unfamiliar terms.
+5. [guides/getting-started.md](guides/getting-started.md) — how to get involved.
+6. [processes/development-workflow.md](processes/development-workflow.md) and [standards/](standards/) — before your first pull request.
+
+For the reasoning behind specific architectural choices, see [decisions/](decisions/) rather than re-deriving it from the architecture document alone.
