@@ -1,0 +1,65 @@
+# Pre-commit hooks for Batoi Classroom Suite.
+#
+# The repository is mostly documentation; the only code today is the
+# `bcs` CLI under cli/ (see docs/CLI.md, docs/decisions/0007-python-for-the-bcs-cli.md).
+# Hooks are scoped to that subdirectory so this file has somewhere
+# meaningful to grow into as boot-manager/, builder/, and deploy/ gain
+# implementations of their own.
+#
+# Install once per clone:
+#   pip install pre-commit && pre-commit install --hook-type pre-commit --hook-type pre-push
+#
+# The local `mypy-cli`/`pytest-cli` hooks below run against whatever
+# Python environment is already active (language: system) - they expect
+# `pip install -e cli/.[dev]` to have been run first, per cli/README.md.
+# CI (.github/workflows/ci.yml) always sets up Python 3.12 explicitly
+# rather than relying on pre-commit's own hook-environment provisioning
+# for that pin, since that provisioning requires a 3.12 interpreter to
+# already be discoverable on the machine running pre-commit.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        name: ruff (lint) - cli/
+        args: ["--config", "cli/pyproject.toml", "--fix"]
+        files: ^cli/
+      - id: ruff-format
+        name: ruff (format) - cli/
+        args: ["--config", "cli/pyproject.toml"]
+        files: ^cli/
+
+  - repo: local
+    hooks:
+      - id: mypy-cli
+        name: mypy - cli/
+        entry: bash -c 'cd cli && mypy'
+        language: system
+        files: ^cli/src/
+        pass_filenames: false
+
+      # Full pytest run is deliberately a pre-push hook, not pre-commit:
+      # fast lint/type checks stay in the commit loop; the (still fast,
+      # but less trivial) test suite runs once before code leaves the
+      # machine. CI runs it unconditionally either way - see
+      # .github/workflows/ci.yml.
+      - id: pytest-cli
+        name: pytest - cli/
+        entry: bash -c 'cd cli && pytest'
+        language: system
+        files: ^cli/
+        pass_filenames: false
+        stages: [pre-push]

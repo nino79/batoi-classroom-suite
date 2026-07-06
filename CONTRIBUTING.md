@@ -28,7 +28,7 @@ As components move from specification into implementation (see [ROADMAP.md](ROAD
 
 The summary below is enough for most contributions; see [docs/processes/development-workflow.md](docs/processes/development-workflow.md) for the full reference (branching model, CI expectations, merge strategy) and [docs/processes/release-process.md](docs/processes/release-process.md) for how releases are cut.
 
-1. **Fork and branch.** Branch names follow `type/short-description`, per [docs/standards/naming-conventions.md](docs/standards/naming-conventions.md#git-branches): `docs/boot-manager-fallback-clarify`, `adr/clonezilla-alternatives`, `feat/builder-manifest-schema`.
+1. **Fork and branch.** Branch names follow `type/short-description`, per [docs/standards/naming-conventions.md](docs/standards/naming-conventions.md#git-branches): `docs/boot-manager-fallback-clarify`, `adr/clonezilla-alternatives`, `feat/deploy-multicast-retry`.
 2. **Commit messages.** Follow [Conventional Commits](https://www.conventionalcommits.org/): `docs:`, `feat:`, `fix:`, `chore:`, `adr:` prefixes. Example: `docs(spec): clarify BLD-005 reproducibility scope`.
 3. **Open a pull request** using the [PR template](.github/PULL_REQUEST_TEMPLATE.md). Link the issue or ADR it addresses.
 4. **Review.** At least one maintainer approval is required before merge. For changes touching `ARCHITECTURE.md`, `SPECIFICATION.md`, or component interfaces, an accompanying ADR is expected.

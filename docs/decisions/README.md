@@ -37,5 +37,8 @@ You do not need an ADR for routine documentation fixes, wording clarifications, 
 | [0002](0002-three-component-separation.md) | Three-component separation | Accepted |
 | [0003](0003-clonezilla-as-deployment-engine.md) | Clonezilla as the deployment engine | Accepted |
 | [0004](0004-bash-as-primary-implementation-language.md) | Bash as the primary implementation language | Accepted |
+| [0005](0005-yaml-as-unified-configuration-format.md) | YAML as the unified configuration format | Accepted |
+| [0006](0006-bcs-unified-cli-architecture.md) | `bcs` as a unified CLI, not three component CLIs | Accepted |
+| [0007](0007-python-for-the-bcs-cli.md) | Python (Typer/Rich/Pydantic/PyYAML) for the `bcs` CLI, superseding Bash for this component | Accepted |
 
 This index should be kept in sync with the files in this directory whenever an ADR is added or its status changes.

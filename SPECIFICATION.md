@@ -36,7 +36,7 @@ BCS is intentionally scoped to a specific, concrete platform rather than generic
 
 | ID | Requirement |
 |---|---|
-| BLD-001 | Builder MUST accept a declarative recipe/manifest describing package sets, configuration, and branding for a golden image. |
+| BLD-001 | Builder MUST accept a declarative recipe describing package sets, configuration, and branding for a golden image. The recipe format is defined in [docs/CONFIGURATION.md](docs/CONFIGURATION.md). |
 | BLD-002 | Builder MUST produce a versioned image artifact, with the version traceable to the recipe and base OS versions used to build it. |
 | BLD-003 | Builder MUST produce output in a format Deploy can consume via Clonezilla (partclone-compatible partition images). |
 | BLD-004 | Builder MUST lay out the target disk image with a UEFI-compatible partition scheme (GPT + ESP) suitable for NVMe targets. |
@@ -54,6 +54,28 @@ BCS is intentionally scoped to a specific, concrete platform rather than generic
 | DEP-005 | Deploy MUST produce a session report (which machines, which image version, timing, outcome) suitable for a single technician auditing a classroom rollout. |
 | DEP-006 | Deploy MUST accept maintenance/re-imaging requests originating from Boot Manager (BM-006) and schedule or execute them. |
 | DEP-007 | A full-classroom multicast deployment of the reference classroom size (see NFR-002) SHOULD complete within a single class period. |
+
+### 2.4 CLI
+
+The `bcs` command-line interface is the single operator entry point into Boot Manager, Builder, and Deploy — see [ARCHITECTURE.md §8](ARCHITECTURE.md#8-operator-interface). Unlike the three components, its detailed design is not split across separate architecture/specification documents: [docs/CLI.md](docs/CLI.md) is the single, complete expansion of this section, by deliberate choice — see its introduction for why.
+
+| ID | Requirement |
+|---|---|
+| CLI-001 | `bcs` MUST provide these top-level commands: `doctor`, `validate`, `inventory`, `build`, `install`, `deploy`, `backup`, `restore`, `update`, `version`, `config`. |
+| CLI-002 | Every command MUST support `--help`; invoking `bcs` with no command, or an unrecognized one with no matching plugin, MUST print top-level help and exit with code `2`. |
+| CLI-003 | `bcs` MUST support a consistent set of global options (see [docs/CLI.md](docs/CLI.md#global-options)) applied uniformly across all commands where applicable. |
+| CLI-004 | `bcs` MUST use a single, documented exit code scheme shared by every command, not a bespoke scheme per command (see [docs/CLI.md](docs/CLI.md#exit-codes)). |
+| CLI-005 | `bcs` MUST write command result data to stdout and logs/diagnostics/progress to stderr, so stdout remains scriptable independent of verbosity. |
+| CLI-006 | Destructive operations (`install`, `deploy`, `restore`) MUST require explicit confirmation, or `--yes`, before proceeding, unless `--dry-run` is given. |
+| CLI-007 | `bcs` MUST validate a loaded ClassroomConfig before `build`, `install`, `deploy`, or `restore` proceed, and MUST abort on failure (see `BLD-001`, [docs/CONFIGURATION.md](docs/CONFIGURATION.md)). |
+| CLI-008 | `bcs` MUST resolve its ClassroomConfig via a documented precedence and MUST refuse to guess when no config can be unambiguously resolved, rather than silently operating against the wrong classroom. |
+| CLI-009 | `bcs` MUST support loading external subcommands as plugins; built-in commands MUST always take precedence over a like-named plugin. |
+| CLI-010 | `bcs` MUST NOT transmit telemetry or usage analytics; its only network calls are those explicitly implied by the invoked command. |
+| CLI-011 | New commands, flags, and output fields MUST be additive within a `bcs` MAJOR version; breaking changes require a MAJOR version bump (see [docs/processes/release-process.md](docs/processes/release-process.md)). |
+| CLI-012 | Machine-readable output (`--output json`) MUST include a `schemaVersion` field so scripts can detect changes across `bcs` versions. |
+| CLI-013 | `bcs` MUST support composable verbosity controls (`-v`/`-q`/`--log-level`) with a documented precedence. |
+| CLI-014 | Color output MUST default to auto-detection (TTY and `NO_COLOR` unset) and MUST be overridable via flags and environment variables. |
+| CLI-015 | `bcs` MUST expose a versioned, immutable Host Inventory snapshot (`bcs inventory`) as the single source of truth describing the current machine; Boot Manager, Builder, and Deploy MUST consume the identical JSON shape, never a bespoke re-probe of the same facts. |
 
 ## 3. Non-Functional Requirements
 
@@ -83,5 +105,6 @@ Detailed, component-level specifications expand on the requirements above:
 - [docs/specifications/boot-manager.md](docs/specifications/boot-manager.md)
 - [docs/specifications/builder.md](docs/specifications/builder.md)
 - [docs/specifications/deploy.md](docs/specifications/deploy.md)
+- [docs/CLI.md](docs/CLI.md) — for `2.4 CLI`; combines the architecture and specification-detail layers the other three components keep separate (a deliberate exception, explained in that document's introduction).
 
 Changes to requirements in this document should be accompanied by an ADR when they represent a scope or architectural change (see [docs/decisions/README.md](docs/decisions/README.md)) and reflected in [ROADMAP.md](ROADMAP.md).

@@ -14,6 +14,8 @@ This directory contains the detailed documentation for Batoi Classroom Suite (BC
 | [guides/](guides/) | Practical, contributor-facing guides: getting started, FAQ. |
 | [glossary.md](glossary.md) | Definitions for domain terms (LliureX, UEFI, ESP, Clonezilla, etc.) used throughout the docs. |
 | [repository-organization.md](repository-organization.md) | Canonical explanation of the whole repository's folder structure. |
+| [CONFIGURATION.md](CONFIGURATION.md) | The unified YAML configuration format (`config/schema.yaml`) that drives Boot Manager, Builder, and Deploy. |
+| [CLI.md](CLI.md) | Complete design of `bcs`, the command-line interface into all three components. |
 
 ## Reading Order
 

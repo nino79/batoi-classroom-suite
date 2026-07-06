@@ -7,7 +7,7 @@ This expands [SPECIFICATION.md §2.2](../../SPECIFICATION.md#22-builder) with ac
 ### BLD-001 — Declarative Recipe Input
 
 - The recipe MUST describe, at minimum: package sets (base + per-subject/per-centre additions), configuration (network, locale, user profile defaults), and branding references (pointing into [assets/](../../assets/)).
-- The recipe format itself (schema, file format) is a Phase 2 deliverable — see [ROADMAP.md](../../ROADMAP.md#phase-2--builder-golden-image-pipeline).
+- The recipe format is defined: it is the `spec.builder` and `spec.packages` sections of the unified BCS configuration document. See [docs/CONFIGURATION.md](../CONFIGURATION.md) for the full field reference, [config/schema.yaml](../../config/schema.yaml) for the normative schema, and [ADR-0005](../decisions/0005-yaml-as-unified-configuration-format.md) for why this format was chosen. Implementing a validator against that schema remains a [Phase 2](../../ROADMAP.md#phase-2--builder-golden-image-pipeline) deliverable.
 
 ### BLD-002 — Versioned, Traceable Artifact
 

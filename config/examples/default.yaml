@@ -1,0 +1,194 @@
+# =============================================================================
+# BCS Configuration — reference example
+# =============================================================================
+# This is a fully populated, realistic example conforming to
+# config/schema.yaml. New centres are expected to copy this file as their
+# starting point rather than writing one from scratch. Every field used
+# here is explained in docs/CONFIGURATION.md.
+#
+# This file is illustrative only — no Builder implementation consumes it
+# yet (BCS is pre-implementation, see ROADMAP.md).
+# =============================================================================
+
+apiVersion: bcs/v1alpha1
+kind: ClassroomConfig
+
+metadata:
+  name: cipfp-batoi-aula-201
+  labels:
+    centre: cipfp-batoi
+    building: edifici-a
+    floor: "2"
+  annotations:
+    contact: sysadmin@cipfpbatoi.es
+    ticket: "INFRA-142"
+
+spec:
+
+  # ---------------------------------------------------------------------
+  project:
+    displayName: "CIPFP Batoi — Aula 201 (Informàtica)"
+    centre: "CIPFP Batoi"
+    academicYear: "2026-2027"
+    contact: "sysadmin@cipfpbatoi.es"
+    description: >-
+      Classroom profile for the ground-floor Computing lab (30 seats),
+      rebuilt each September from the current LliureX 23 golden image.
+
+  # ---------------------------------------------------------------------
+  branding:
+    logo: logos/cipfp-batoi.svg
+    icon: icons/cipfp-batoi.png
+    background: backgrounds/default.png
+    font: fonts/NotoSans-Regular.ttf
+    colors:
+      primary: "#0057B8"
+      accent: "#FDB913"
+
+  # ---------------------------------------------------------------------
+  bootManager:
+    enabled: true
+    menu:
+      timeoutSeconds: 10
+      defaultEntry: normal-boot
+      entries:
+        - id: normal-boot
+          label:
+            ca_ES: "Inicia LliureX"
+            es_ES: "Iniciar LliureX"
+          action: boot-installed-os
+        - id: maintenance
+          label:
+            ca_ES: "Manteniment / reinstal·lació"
+            es_ES: "Mantenimiento / reinstalación"
+          action: request-deploy-maintenance
+    fallback:
+      onConfigError: boot-installed-os
+
+  # ---------------------------------------------------------------------
+  builder:
+    baseImage:
+      distro: lliurex
+      distroVersion: "23"
+      baseDistribution: ubuntu
+      baseDistributionVersion: "24.04"
+      pinnedSnapshot: "2026-06-01"
+    partitioning:
+      scheme: gpt
+      espSizeMiB: 512
+      recoveryPartition:
+        enabled: true
+        sizeMiB: 8192
+    provenance:
+      checksumAlgorithm: sha256
+    output:
+      format: partclone
+      compression: zstd
+
+  # ---------------------------------------------------------------------
+  packages:
+    base:
+      - lliurex-desktop
+      - firefox
+      - libreoffice
+    profiles:
+      informatica:
+        - code::blocks
+        - visual-studio-code
+        - docker.io
+      disseny:
+        - gimp
+        - inkscape
+        - blender
+    remove:
+      - lliurex-games-extra
+    repositories:
+      - name: lliurex
+        uri: "https://repo.lliurex.net/lliurex/"
+        signingKey: keys/lliurex-archive-keyring.gpg
+
+  # ---------------------------------------------------------------------
+  deploy:
+    transport:
+      pxe:
+        enabled: true
+        serverAddress: "10.20.1.5"
+      multicast:
+        enabled: true
+        addressRange: "232.10.10.0/24"
+    session:
+      referenceClassroomSize: 30
+      timeoutMinutes: 50
+      retry:
+        maxAttempts: 3
+        backoffSeconds: 30
+    verification:
+      checksumAlgorithm: sha256
+      onMismatch: abort-machine
+    reporting:
+      format: json
+      retentionDays: 90
+    maintenanceRequests:
+      enabled: true
+      machineIdentity: mac-address
+
+  # ---------------------------------------------------------------------
+  users:
+    defaultProfile:
+      shell: "/bin/bash"
+      groups: ["alumnat"]
+    accounts:
+      - name: docent
+        role: teacher
+        groups: ["professorat", "sudo"]
+        sudo: true
+      - name: alumnat
+        role: student
+        groups: ["alumnat"]
+        sudo: false
+    authentication:
+      method: local
+    session:
+      autologin: false
+      guestSession: true
+
+  # ---------------------------------------------------------------------
+  network:
+    hostnamePattern: "aula201-pc{index}"
+    domain: "aules.cipfpbatoi.es"
+    dns:
+      - "10.20.0.1"
+      - "10.20.0.2"
+    proxy:
+      http: ""
+      https: ""
+      noProxy: ["10.20.0.0/16"]
+    addressing:
+      mode: dhcp
+
+  # ---------------------------------------------------------------------
+  localization:
+    defaultLocale: ca_ES
+    supportedLocales: [ca_ES, es_ES]
+    timezone: "Europe/Madrid"
+    keyboardLayout: "es"
+
+  # ---------------------------------------------------------------------
+  security:
+    secureBoot:
+      mode: enforce
+    credentials:
+      embedSharedCredentials: false
+    updates:
+      autoSecurityUpdates: true
+    imageSigning:
+      enabled: false
+    networkTrust:
+      allowedDeployServers:
+        - "10.20.1.5"
+
+  # ---------------------------------------------------------------------
+  # No unformalized fields needed for this classroom yet — extensions is
+  # shown empty here deliberately, so the section is visible even when
+  # unused. See docs/CONFIGURATION.md#extensibility-model.
+  extensions: {}

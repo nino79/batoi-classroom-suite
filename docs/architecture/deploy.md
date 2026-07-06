@@ -1,6 +1,6 @@
 # Deploy — Architecture
 
-See also: [docs/specifications/deploy.md](../specifications/deploy.md) for the normative requirements this design must satisfy, and [deploy/README.md](../../deploy/README.md) for the component's current status.
+See also: [docs/specifications/deploy.md](../specifications/deploy.md) for the normative requirements this design must satisfy, and [deploy/README.md](../../deploy/README.md) for the component's current status. Invoked by a technician via `bcs install` (single machine) and `bcs deploy` (classroom fleet) — see [docs/CLI.md](../CLI.md#bcs-install) and [docs/CLI.md](../CLI.md#bcs-deploy). Deploy is an intended consumer of the [Host Inventory subsystem](../CLI.md#the-host-inventory-subsystem) (`bcs inventory`) — its `identity` section is the concrete data source for whatever machine-identity scheme resolves the open question below.
 
 ## Purpose
 
@@ -64,6 +64,6 @@ Deploy's job is to orchestrate Clonezilla sessions (unicast and multicast) and P
 To be resolved during [Phase 3](../../ROADMAP.md#phase-3--deploy-single-classroom-rollout) and [Phase 4](../../ROADMAP.md#phase-4--integration-closed-loop):
 
 - Exact PXE/multicast session scheduling model: always-on deployment server vs. on-demand session start triggered by a technician or by a Boot Manager maintenance request.
-- Format and transport of the maintenance request from Boot Manager (joint decision with [boot-manager.md](boot-manager.md)).
+- Format and transport of the maintenance request from Boot Manager (joint decision with [boot-manager.md](boot-manager.md)). [docs/CONFIGURATION.md](../CONFIGURATION.md) now lets a deployment declare *which* machine-identity strategy is in effect (`deploy.maintenanceRequests.machineIdentity`: MAC address, DMI UUID, or custom) — this narrows but does not resolve the question, since the request's actual wire format/schema is still undesigned.
 - Where and how session reports (`DEP-005`) are persisted and surfaced to a technician managing multiple classrooms.
-- Network trust model for PXE/multicast traffic on the classroom LAN (see [SECURITY.md](../../SECURITY.md#security-relevant-design-areas)).
+- Network trust model for PXE/multicast traffic on the classroom LAN (see [SECURITY.md](../../SECURITY.md#security-relevant-design-areas)). [docs/CONFIGURATION.md](../CONFIGURATION.md)'s `security.networkTrust.allowedDeployServers` gives a configuration-level allowlist, but enforcement is not yet designed.

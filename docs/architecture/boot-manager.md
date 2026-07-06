@@ -42,7 +42,7 @@ The critical property of this state machine is that **every path not explicitly 
 
 ### UEFI, not BIOS
 
-Boot Manager assumes UEFI firmware exclusively (`PLAT-003`). This removes an entire category of legacy boot-order/MBR complexity, but introduces UEFI-specific concerns: NVRAM boot entry management (which can be firmware-quirky across OEMs and models found in classroom hardware refreshes), and Secure Boot (`PLAT-004`), which constrains what can be executed in the boot chain without either a signed chain of trust or an explicit, deliberate opt-out.
+Boot Manager assumes UEFI firmware exclusively (`PLAT-003`). This removes an entire category of legacy boot-order/MBR complexity, but introduces UEFI-specific concerns: NVRAM boot entry management (which can be firmware-quirky across OEMs and models found in classroom hardware refreshes), and Secure Boot (`PLAT-004`), which constrains what can be executed in the boot chain without either a signed chain of trust or an explicit, deliberate opt-out. Boot Manager is an intended consumer of the [Host Inventory subsystem](../CLI.md#the-host-inventory-subsystem) (`bcs inventory`)'s `firmware` section — the single source of truth for whether a given machine is UEFI-capable and its observed Secure Boot state, rather than a second, Bash-specific probe of the same facts.
 
 ### Safety Over Availability of the Menu
 

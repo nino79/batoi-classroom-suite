@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(git config *)",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(python3 -c ' *)",
+      "Bash(\"/c/Users/elnin/AppData/Local/Programs/Python/Python313/python.exe\" -m venv .venv-cli-test)",
+      "Bash(./.venv-cli-test/Scripts/python.exe -m pip install --quiet --upgrade pip)",
+      "Bash(./.venv-cli-test/Scripts/python.exe -m pip install --quiet \"typer>=0.12\" \"rich>=13\" \"pydantic>=2\" \"pyyaml>=6\" pytest pytest-cov ruff mypy types-PyYAML)",
+      "Bash(./.venv-cli-test/Scripts/python.exe -c \"import typer, rich, pydantic, yaml; print\\('typer', typer.__version__\\); print\\('rich', rich.__version__\\); print\\('pydantic', pydantic.VERSION\\)\")",
+      "Bash(./.venv-cli-test/Scripts/python.exe -m pip show typer)",
+      "Bash(./.venv-cli-test/Scripts/python.exe -c ' *)",
+      "Bash(../.venv-cli-test/Scripts/python.exe -c ' *)",
+      "Bash(../.venv-cli-test/Scripts/python.exe -m pip install --quiet -e \".[dev]\")"
     ]
   }
 }

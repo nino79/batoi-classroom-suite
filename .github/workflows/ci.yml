@@ -1,0 +1,105 @@
+name: CI
+
+# Scoped to cli/ (the only implemented code today - see docs/CLI.md and
+# docs/decisions/0007-python-for-the-bcs-cli.md); the path filters below
+# keep this from running on documentation-only changes, consistent with
+# the "documentation is not implementation" boundary the rest of this
+# repository draws. Extend the paths/jobs here as boot-manager/,
+# builder/, and deploy/ gain implementations of their own, per
+# docs/processes/development-workflow.md#ci-expectations-once-implemented.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cli/**"
+      - "config/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "cli/**"
+      - "config/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: cli
+
+jobs:
+  lint:
+    name: Ruff (lint + format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Ruff check
+        run: ruff check .
+      - name: Ruff format --check
+        run: ruff format --check .
+
+  typecheck:
+    name: mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: mypy
+        run: mypy
+
+  test:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: pytest
+        run: pytest --cov-report=xml
+
+  cli-smoke-test:
+    name: bcs --help / version / doctor / validate smoke test
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install bcs
+        run: pip install -e .
+      - name: bcs --help
+        run: bcs --help
+      - name: bcs version
+        run: bcs version --output json
+      - name: bcs doctor (informational; exit code not gated in CI)
+        run: bcs doctor --output json || true
+      - name: bcs validate (real example config)
+        run: bcs validate ../config/examples/default.yaml --output json
+
+  all-green:
+    name: All checks passed
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, cli-smoke-test]
+    if: always()
+    steps:
+      - name: Fail if any dependency failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

@@ -10,6 +10,7 @@ Distributes golden images from [Builder](../builder/) onto classroom fleets via 
 
 - Design and rationale: [docs/architecture/deploy.md](../docs/architecture/deploy.md)
 - Requirements: [docs/specifications/deploy.md](../docs/specifications/deploy.md)
+- CLI entry points: [`bcs install`](../docs/CLI.md#bcs-install) (single machine), [`bcs deploy`](../docs/CLI.md#bcs-deploy) (classroom fleet), [`bcs backup`](../docs/CLI.md#bcs-backup) / [`bcs restore`](../docs/CLI.md#bcs-restore)
 - Requirement IDs referenced below (`DEP-xxx`) are defined in [SPECIFICATION.md §2.3](../SPECIFICATION.md#23-deploy).
 
 ## Scope

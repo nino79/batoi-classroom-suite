@@ -13,3 +13,15 @@ Thumbs.db
 *.img
 *.qcow2
 /builder/output/
+
+# Python (cli/) — see cli/README.md for the expected dev setup
+.venv*/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+htmlcov/
+.coverage
+coverage.xml

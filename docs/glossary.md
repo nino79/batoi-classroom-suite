@@ -10,6 +10,8 @@ Domain and technical terms used throughout BCS documentation, in alphabetical or
 
 **Classroom Fleet** — the set of physically similar machines in a single computer classroom, treated as the natural unit of a deployment session (see `NFR-002`).
 
+**ClassroomConfig** — the `kind` of the unified BCS configuration document (`apiVersion: bcs/v1alpha1`) that drives Boot Manager, Builder, and Deploy for one classroom. See [docs/CONFIGURATION.md](CONFIGURATION.md) and [config/schema.yaml](../config/schema.yaml).
+
 **Clonezilla** — an open-source disk cloning/imaging tool, built on `partclone`, used by BCS's Deploy component as its underlying deployment engine (`PLAT-006`). See [ADR-0003](decisions/0003-clonezilla-as-deployment-engine.md).
 
 **Deploy** — the BCS component that distributes golden images to a classroom fleet and verifies the result. See [docs/architecture/deploy.md](architecture/deploy.md).
@@ -32,7 +34,7 @@ Domain and technical terms used throughout BCS documentation, in alphabetical or
 
 **PXE (Preboot Execution Environment)** — a standard allowing a machine to boot over the network without local media, used as the entry point into Deploy's deployment sessions (`DEP-002`).
 
-**Recipe (Image Recipe / Manifest)** — the declarative description of package sets, configuration, and branding that Builder consumes to produce a golden image (`BLD-001`).
+**Recipe** — informal shorthand for the `spec.builder` and `spec.packages` sections of a ClassroomConfig document: the declarative description of package sets, configuration, and branding that Builder consumes to produce a golden image (`BLD-001`). See [docs/CONFIGURATION.md](CONFIGURATION.md). The term "manifest," used interchangeably with "recipe" in earlier drafts of this documentation, is retired — see [ADR-0005](decisions/0005-yaml-as-unified-configuration-format.md).
 
 **Secure Boot** — a UEFI firmware feature that only allows cryptographically signed bootloaders/kernels to execute. A platform-level constraint on Boot Manager's design (`PLAT-004`).
 

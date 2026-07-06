@@ -16,8 +16,11 @@ Status legend: ✅ Done · 🚧 In progress · ⏳ Planned · 💤 Not started
 | Contribution workflow, Code of Conduct, Security policy | 🚧 |
 | Initial Architecture Decision Records | 🚧 |
 | Issue/PR templates and label taxonomy | 🚧 |
+| Unified configuration format (`docs/CONFIGURATION.md`, `config/schema.yaml`) | ✅ |
+| `bcs` CLI design (`docs/CLI.md`) | ✅ |
+| `bcs` CLI framework implementation (`cli/`, Python — [ADR-0007](docs/decisions/0007-python-for-the-bcs-cli.md)) | ✅ |
 
-This phase produces **no installable software** — its output is the documentation set in this repository, reviewed and validated with maintainers before Phase 1 begins.
+This phase's primary output is the documentation set in this repository. The one exception is the `bcs` CLI framework itself (`--help`, `version`, `doctor`, `validate`, with `build`/`install`/`deploy`/`backup`/`restore`/`update`/`config` as unimplemented stubs) — a deliberate, scoped exception, not a sign Boot Manager/Builder/Deploy implementation has started; those remain gated on this phase's review before Phase 1 begins.
 
 ## Phase 1 — Boot Manager: Design Validation
 
@@ -33,7 +36,7 @@ This phase produces **no installable software** — its output is the documentat
 
 **Goal:** define and validate a reproducible build pipeline for a LliureX 23 golden image.
 
-- ⏳ Image recipe/manifest format (package sets, configuration, branding)
+- ✅ Recipe/configuration format (package sets, configuration, branding) — see [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and [config/schema.yaml](config/schema.yaml); a validator implementation is still 💤
 - ⏳ Build provenance and versioning scheme, aligned with `VERSION` and `CHANGELOG.md`
 - ⏳ Output format validated against Clonezilla/partclone compatibility
 - ⏳ First reproducible reference image built from a minimal recipe

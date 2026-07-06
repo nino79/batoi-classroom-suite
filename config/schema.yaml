@@ -1,0 +1,666 @@
+# =============================================================================
+# Batoi Classroom Suite — Unified Configuration Schema
+# =============================================================================
+# This is a declarative contract (JSON Schema, Draft-07, expressed in YAML),
+# not executable code. It defines the single configuration document that
+# drives Boot Manager, Builder, and Deploy end to end. See
+# docs/CONFIGURATION.md for the full field-by-field explanation and
+# docs/decisions/0005-yaml-as-unified-configuration-format.md for why this
+# format and structure were chosen.
+#
+# No validator tool exists yet (BCS is still pre-implementation, see
+# ROADMAP.md) — this schema is the target contract that tooling under
+# tools/ is expected to validate against once Builder is implemented.
+# =============================================================================
+$schema: "http://json-schema.org/draft-07/schema#"
+$id: "bcs/v1alpha1/config.schema.yaml"
+title: BCS Configuration
+description: >-
+  The single YAML configuration document that controls Boot Manager,
+  Builder, and Deploy for one classroom profile.
+type: object
+additionalProperties: false
+patternProperties:
+  "^x-": {}   # root-level vendor/tooling extension keys, see bottom of file
+
+required:
+  - apiVersion
+  - kind
+  - metadata
+  - spec
+
+properties:
+
+  # ---------------------------------------------------------------------
+  # Envelope — Kubernetes-style, so the schema itself can evolve
+  # ---------------------------------------------------------------------
+  apiVersion:
+    type: string
+    description: >-
+      Schema group and version, e.g. "bcs/v1alpha1". Governs which fields
+      are valid. See docs/CONFIGURATION.md#versioning-the-schema.
+    enum: ["bcs/v1alpha1"]
+
+  kind:
+    type: string
+    description: >-
+      The kind of configuration document. Only "ClassroomConfig" exists in
+      v1alpha1. Reserved for future kinds (e.g. "FleetConfig") — see
+      docs/CONFIGURATION.md#future-kinds.
+    enum: ["ClassroomConfig"]
+
+  metadata:
+    type: object
+    description: Machine-readable identity and selection metadata for this document.
+    additionalProperties: false
+    required: ["name"]
+    properties:
+      name:
+        type: string
+        description: >-
+          Unique, machine-readable identifier for this configuration
+          document (not the human-facing project name — see
+          spec.project.displayName).
+        pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        examples: ["cipfp-batoi-aula-201"]
+      labels:
+        type: object
+        description: >-
+          Free-form key/value pairs for grouping and future selection
+          (e.g. by centre, building, floor). Not interpreted by v1alpha1
+          tooling; reserved for future fleet-level tooling.
+        additionalProperties: {type: string}
+      annotations:
+        type: object
+        description: >-
+          Free-form, non-identifying metadata (contact links, ticket
+          references, provisioning notes). Never used for matching/selection.
+        additionalProperties: {type: string}
+
+  spec:
+    type: object
+    description: The actual platform configuration.
+    additionalProperties: false
+    patternProperties:
+      "^x-": {}   # vendor/site extension fields, see spec.extensions below
+    required:
+      - project
+      - bootManager
+      - builder
+      - packages
+      - deploy
+      - network
+      - localization
+      - security
+
+    properties:
+
+      # -----------------------------------------------------------------
+      # Project metadata (human-facing)
+      # -----------------------------------------------------------------
+      project:
+        type: object
+        description: Human-facing project/centre metadata. See docs/CONFIGURATION.md#project.
+        additionalProperties: false
+        required: ["displayName", "centre"]
+        properties:
+          displayName:
+            type: string
+            description: Human-readable name for this configuration (shown in reports, logs).
+          centre:
+            type: string
+            description: Name of the educational centre operating this configuration.
+          academicYear:
+            type: string
+            description: Academic year this configuration is current for.
+            pattern: "^[0-9]{4}-[0-9]{4}$"
+            examples: ["2026-2027"]
+          contact:
+            type: string
+            description: Contact address (typically email) for whoever owns this configuration.
+            format: email
+          description:
+            type: string
+            description: Free-text notes about this configuration's purpose or scope.
+
+      # -----------------------------------------------------------------
+      # Branding (assets/ references consumed by Boot Manager, BM-004)
+      # -----------------------------------------------------------------
+      branding:
+        type: object
+        description: >-
+          Visual identity applied to Boot Manager's menu. All paths are
+          relative to assets/ (see assets/README.md). Optional — omitted
+          fields fall back to BCS's default branding.
+        additionalProperties: false
+        properties:
+          logo:
+            type: string
+            description: 'Path relative to assets/, e.g. "logos/cipfp-batoi.svg".'
+          icon:
+            type: string
+            description: 'Path relative to assets/, e.g. "icons/cipfp-batoi.png".'
+          background:
+            type: string
+            description: 'Path relative to assets/, e.g. "backgrounds/default.png".'
+          font:
+            type: string
+            description: 'Path relative to assets/, e.g. "fonts/NotoSans-Regular.ttf".'
+          colors:
+            type: object
+            description: Optional accent colors for the boot menu theme.
+            additionalProperties: false
+            properties:
+              primary:
+                type: string
+                pattern: "^#[0-9a-fA-F]{6}$"
+              accent:
+                type: string
+                pattern: "^#[0-9a-fA-F]{6}$"
+
+      # -----------------------------------------------------------------
+      # Boot Manager (BM-001 .. BM-007)
+      # -----------------------------------------------------------------
+      bootManager:
+        type: object
+        description: Boot-time menu and behavior. See docs/specifications/boot-manager.md.
+        additionalProperties: false
+        required: ["menu"]
+        properties:
+          enabled:
+            type: boolean
+            description: Whether Boot Manager's menu is installed at all.
+            default: true
+          menu:
+            type: object
+            description: "BM-001, BM-002: bounded menu presentation and boot paths."
+            additionalProperties: false
+            required: ["entries", "defaultEntry"]
+            properties:
+              timeoutSeconds:
+                type: integer
+                description: "BM-001: seconds before defaultEntry is taken automatically."
+                minimum: 0
+                default: 10
+              defaultEntry:
+                type: string
+                description: id of the entries[] item taken on timeout or no input.
+              entries:
+                type: array
+                description: "BM-002: available boot paths."
+                minItems: 1
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: ["id", "label", "action"]
+                  properties:
+                    id:
+                      type: string
+                      pattern: "^[a-z0-9-]+$"
+                    label:
+                      type: object
+                      description: >-
+                        Per-locale display text. Must include every locale
+                        listed in spec.localization.supportedLocales (BM-007).
+                      additionalProperties: {type: string}
+                      minProperties: 1
+                    action:
+                      type: string
+                      description: What this entry does.
+                      enum:
+                        - boot-installed-os
+                        - request-deploy-maintenance
+                        - boot-recovery
+          fallback:
+            type: object
+            description: "BM-005: safety fallback, not a user-editable behavior."
+            additionalProperties: false
+            properties:
+              onConfigError:
+                type: string
+                description: >-
+                  Fixed by design (BM-005). Present only so the safety
+                  guarantee is documented and auditable, not because it can
+                  be changed to anything else.
+                const: boot-installed-os
+                default: boot-installed-os
+
+      # -----------------------------------------------------------------
+      # Builder (BLD-001 .. BLD-006)
+      # -----------------------------------------------------------------
+      builder:
+        type: object
+        description: >-
+          Golden image build parameters. This section, combined with
+          spec.packages, is what BLD-001 refers to as Builder's "recipe."
+          See docs/specifications/builder.md.
+        additionalProperties: false
+        required: ["baseImage", "partitioning"]
+        properties:
+          baseImage:
+            type: object
+            description: "PLAT-001, PLAT-002: fixed base platform, pinned for reproducibility (BLD-005)."
+            additionalProperties: false
+            required: ["distro", "distroVersion", "baseDistribution", "baseDistributionVersion"]
+            properties:
+              distro:
+                type: string
+                const: lliurex
+              distroVersion:
+                type: string
+                default: "23"
+              baseDistribution:
+                type: string
+                const: ubuntu
+              baseDistributionVersion:
+                type: string
+                default: "24.04"
+              pinnedSnapshot:
+                type: string
+                description: >-
+                  Date (YYYY-MM-DD) of the upstream package mirror snapshot
+                  to build against. Strongly recommended: without this,
+                  BLD-005's reproducibility claim is undermined by upstream
+                  point-release drift.
+                pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          partitioning:
+            type: object
+            description: "BLD-004: UEFI-compatible partition layout for NVMe targets."
+            additionalProperties: false
+            required: ["espSizeMiB"]
+            properties:
+              scheme:
+                type: string
+                const: gpt
+                default: gpt
+              espSizeMiB:
+                type: integer
+                minimum: 256
+                default: 512
+              recoveryPartition:
+                type: object
+                additionalProperties: false
+                properties:
+                  enabled:
+                    type: boolean
+                    default: true
+                  sizeMiB:
+                    type: integer
+                    minimum: 1024
+                    default: 8192
+          provenance:
+            type: object
+            description: "BLD-006: build provenance recording."
+            additionalProperties: false
+            properties:
+              checksumAlgorithm:
+                type: string
+                enum: [sha256, sha512]
+                default: sha256
+          output:
+            type: object
+            description: "BLD-003: Clonezilla/partclone-compatible output."
+            additionalProperties: false
+            properties:
+              format:
+                type: string
+                const: partclone
+                default: partclone
+              compression:
+                type: string
+                enum: [none, gzip, zstd]
+                default: zstd
+
+      # -----------------------------------------------------------------
+      # Software packages
+      # -----------------------------------------------------------------
+      packages:
+        type: object
+        description: >-
+          Package selection for the golden image. Consumed by Builder
+          alongside spec.builder. See BLD-001.
+        additionalProperties: false
+        required: ["base"]
+        properties:
+          base:
+            type: array
+            description: Packages installed on every machine regardless of profile.
+            items: {type: string}
+            minItems: 1
+          profiles:
+            type: object
+            description: >-
+              Named, additive package groups (e.g. per subject/workshop).
+              Not selected by this schema — selection is a deployment-time
+              concern outside v1alpha1's scope (see docs/CONFIGURATION.md
+              open questions).
+            additionalProperties:
+              type: array
+              items: {type: string}
+          remove:
+            type: array
+            description: Packages explicitly excluded from the base distro/LliureX defaults.
+            items: {type: string}
+          repositories:
+            type: array
+            description: >-
+              Additional APT repositories Builder trusts, each requiring an
+              explicit signing key reference (supply-chain trust — see
+              REVIEW.md §2).
+            items:
+              type: object
+              additionalProperties: false
+              required: ["name", "uri", "signingKey"]
+              properties:
+                name: {type: string}
+                uri: {type: string, format: uri}
+                signingKey:
+                  type: string
+                  description: 'Path relative to assets/, e.g. "keys/lliurex-archive-keyring.gpg".'
+
+      # -----------------------------------------------------------------
+      # Deploy (DEP-001 .. DEP-007)
+      # -----------------------------------------------------------------
+      deploy:
+        type: object
+        description: Fleet deployment behavior. See docs/specifications/deploy.md.
+        additionalProperties: false
+        required: ["transport", "session"]
+        properties:
+          transport:
+            type: object
+            description: "DEP-002: how machines enter a deployment session."
+            additionalProperties: false
+            properties:
+              pxe:
+                type: object
+                additionalProperties: false
+                properties:
+                  enabled: {type: boolean, default: true}
+                  serverAddress: {type: string, format: ipv4}
+              multicast:
+                type: object
+                additionalProperties: false
+                properties:
+                  enabled: {type: boolean, default: true}
+                  addressRange:
+                    type: string
+                    description: Multicast CIDR range used for classroom-wide sessions.
+                    default: "232.10.10.0/24"
+          session:
+            type: object
+            description: "DEP-001, DEP-007, NFR-002: session sizing and performance target."
+            additionalProperties: false
+            properties:
+              referenceClassroomSize:
+                type: integer
+                description: "NFR-002: assumed machines per session, for capacity planning."
+                minimum: 1
+                default: 30
+              timeoutMinutes:
+                type: integer
+                description: "DEP-007: target upper bound, tied to a class period."
+                minimum: 1
+                default: 50
+              retry:
+                type: object
+                description: "NFR-001: per-machine retry, isolated from the rest of the session."
+                additionalProperties: false
+                properties:
+                  maxAttempts: {type: integer, minimum: 0, default: 3}
+                  backoffSeconds: {type: integer, minimum: 0, default: 30}
+          verification:
+            type: object
+            description: "DEP-004: post-deploy checksum verification."
+            additionalProperties: false
+            properties:
+              checksumAlgorithm:
+                type: string
+                enum: [sha256, sha512]
+                default: sha256
+              onMismatch:
+                type: string
+                enum: [abort-machine, abort-session]
+                default: abort-machine
+          reporting:
+            type: object
+            description: "DEP-005: session reporting."
+            additionalProperties: false
+            properties:
+              format:
+                type: string
+                enum: [json, text]
+                default: json
+              retentionDays:
+                type: integer
+                minimum: 1
+                default: 90
+          maintenanceRequests:
+            type: object
+            description: >-
+              BM-006 / DEP-006 handshake configuration. NOTE: this declares
+              which machine-identity strategy is in effect; the wire
+              format/transport of the request itself remains an open
+              question — see docs/architecture/deploy.md#open-questions.
+            additionalProperties: false
+            properties:
+              enabled: {type: boolean, default: true}
+              machineIdentity:
+                type: string
+                description: How a machine identifies itself when requesting maintenance.
+                enum: [mac-address, dmi-uuid, custom]
+                default: mac-address
+
+      # -----------------------------------------------------------------
+      # Users
+      # -----------------------------------------------------------------
+      users:
+        type: object
+        description: Default OS-level accounts baked into the golden image.
+        additionalProperties: false
+        properties:
+          defaultProfile:
+            type: object
+            additionalProperties: false
+            properties:
+              shell: {type: string, default: "/bin/bash"}
+              groups:
+                type: array
+                items: {type: string}
+                default: []
+          accounts:
+            type: array
+            items:
+              type: object
+              additionalProperties: false
+              required: ["name", "role"]
+              properties:
+                name: {type: string, pattern: "^[a-z_][a-z0-9_-]*$"}
+                role:
+                  type: string
+                  enum: [teacher, student, technician]
+                groups:
+                  type: array
+                  items: {type: string}
+                sudo: {type: boolean, default: false}
+          authentication:
+            type: object
+            additionalProperties: false
+            properties:
+              method:
+                type: string
+                enum: [local, ldap, none]
+                default: local
+              ldap:
+                type: object
+                description: Reserved for future centre directory integration.
+                additionalProperties: false
+                properties:
+                  uri: {type: string, format: uri}
+                  baseDn: {type: string}
+          session:
+            type: object
+            additionalProperties: false
+            properties:
+              autologin: {type: boolean, default: false}
+              guestSession: {type: boolean, default: true}
+
+      # -----------------------------------------------------------------
+      # Network (deployed machine's own network config — see
+      # docs/CONFIGURATION.md#network-vs-deploytransport for the boundary
+      # with spec.deploy.transport, which configures the deployment
+      # mechanism itself rather than the deployed machine)
+      # -----------------------------------------------------------------
+      network:
+        type: object
+        additionalProperties: false
+        required: ["addressing"]
+        properties:
+          hostnamePattern:
+            type: string
+            description: >-
+              Template for the deployed machine's hostname. Supports
+              {centre} and {index} placeholders.
+            default: "{centre}-pc{index}"
+          domain:
+            type: string
+          dns:
+            type: array
+            items: {type: string, format: ipv4}
+          proxy:
+            type: object
+            additionalProperties: false
+            properties:
+              http: {type: string}
+              https: {type: string}
+              noProxy:
+                type: array
+                items: {type: string}
+          addressing:
+            type: object
+            additionalProperties: false
+            required: ["mode"]
+            properties:
+              mode:
+                type: string
+                enum: [dhcp, static]
+                default: dhcp
+              staticAssignments:
+                type: array
+                description: Only meaningful when mode is "static".
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: ["hostname", "mac", "ip"]
+                  properties:
+                    hostname: {type: string}
+                    mac: {type: string, pattern: "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"}
+                    ip: {type: string, format: ipv4}
+
+      # -----------------------------------------------------------------
+      # Localization (BM-007, NFR-006)
+      # -----------------------------------------------------------------
+      localization:
+        type: object
+        additionalProperties: false
+        required: ["defaultLocale"]
+        properties:
+          defaultLocale:
+            type: string
+            enum: [ca_ES, es_ES]
+            default: ca_ES
+          supportedLocales:
+            type: array
+            items:
+              type: string
+              enum: [ca_ES, es_ES, en_US]
+            default: [ca_ES, es_ES]
+          timezone:
+            type: string
+            default: "Europe/Madrid"
+          keyboardLayout:
+            type: string
+            default: "es"
+
+      # -----------------------------------------------------------------
+      # Security (NFR-003, PLAT-004, and SECURITY.md's design areas)
+      # -----------------------------------------------------------------
+      security:
+        type: object
+        additionalProperties: false
+        required: ["secureBoot", "credentials"]
+        properties:
+          secureBoot:
+            type: object
+            description: >-
+              PLAT-004: canonical Secure Boot posture. Boot Manager's boot
+              chain (see docs/architecture/boot-manager.md) honors this
+              value; it is not repeated under spec.bootManager.
+            additionalProperties: false
+            required: ["mode"]
+            properties:
+              mode:
+                type: string
+                enum: [enforce, permissive, disabled]
+                default: enforce
+          credentials:
+            type: object
+            description: "NFR-003: no long-lived shared credentials may ever be embedded."
+            additionalProperties: false
+            properties:
+              embedSharedCredentials:
+                type: boolean
+                description: >-
+                  Always false. Present for explicitness/auditability, not
+                  because embedding shared credentials is ever permitted.
+                const: false
+                default: false
+          updates:
+            type: object
+            additionalProperties: false
+            properties:
+              autoSecurityUpdates:
+                type: boolean
+                default: true
+          imageSigning:
+            type: object
+            description: >-
+              Reserved: Builder does not implement image signing yet.
+              Setting enabled: true has no effect until that capability
+              exists (see ROADMAP.md Phase 5).
+            additionalProperties: false
+            properties:
+              enabled: {type: boolean, default: false}
+              keyRef: {type: string}
+          networkTrust:
+            type: object
+            description: >-
+              Partial mitigation for the network trust model gap noted in
+              SECURITY.md — an explicit allowlist of legitimate Deploy
+              servers, enforced once Deploy implements it.
+            additionalProperties: false
+            properties:
+              allowedDeployServers:
+                type: array
+                items: {type: string, format: ipv4}
+
+      # -----------------------------------------------------------------
+      # Future extensions
+      # -----------------------------------------------------------------
+      extensions:
+        type: object
+        description: >-
+          Sanctioned home for structured fields that haven't graduated into
+          the formal schema yet. Always optional; validators MUST accept
+          any content here without error. See
+          docs/CONFIGURATION.md#extensibility-model.
+        additionalProperties: true
+        default: {}
+
+# ===========================================================================
+# Vendor/tooling metadata pass-through: any key prefixed with "x-", at any
+# level of the document, is ignored by schema validation. This is the
+# Docker Compose convention, used here for ad hoc tooling metadata that
+# doesn't warrant a formal spec.extensions entry. See
+# docs/CONFIGURATION.md#extensibility-model.
+# ===========================================================================

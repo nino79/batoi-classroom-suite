@@ -60,7 +60,7 @@ Detail: [docs/architecture/boot-manager.md](docs/architecture/boot-manager.md), 
 
 **Responsibility:** turn a declarative description of "what a classroom PC should be" into a versioned, reproducible disk image.
 
-- Consumes an image recipe/manifest (package sets, configuration, branding, per-subject software) targeting LliureX 23 on Ubuntu 24.04 LTS.
+- Consumes a declarative recipe — the `spec.builder`/`spec.packages` sections of the unified [BCS configuration](docs/CONFIGURATION.md) (package sets, configuration, branding, per-subject software) — targeting LliureX 23 on Ubuntu 24.04 LTS.
 - Produces a golden image in a format consumable by the deployment engine (Clonezilla / partclone-compatible partition images), including a correctly laid out UEFI ESP (EFI System Partition) for NVMe targets.
 - Is the single point where package versions, base OS version, and classroom customisation are pinned — so that two builds from the same recipe produce the same result.
 - Publishes build artifacts with a version identifier consistent with [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md).
@@ -122,3 +122,10 @@ Significant, hard-to-reverse decisions are recorded as ADRs in [docs/decisions/]
 - [ADR-0001 — Record architecture decisions](docs/decisions/0001-record-architecture-decisions.md)
 - [ADR-0002 — Three-component separation](docs/decisions/0002-three-component-separation.md)
 - [ADR-0003 — Clonezilla as the deployment engine](docs/decisions/0003-clonezilla-as-deployment-engine.md)
+- [ADR-0004 — Bash as the primary implementation language](docs/decisions/0004-bash-as-primary-implementation-language.md)
+- [ADR-0005 — YAML as the unified configuration format](docs/decisions/0005-yaml-as-unified-configuration-format.md)
+- [ADR-0006 — `bcs` as a unified CLI, not three component CLIs](docs/decisions/0006-bcs-unified-cli-architecture.md)
+
+## 8. Operator Interface
+
+Sections 3–7 describe the three components as they relate to *each other*. A human still needs one thing to type. That's [`bcs`](docs/CLI.md), a single command-line tool that dispatches to whichever component owns a given command (`build` → Builder; `install`/`deploy`/`backup`/`restore` → Deploy; `doctor`/`validate`/`version`/`config`/`update` are cross-cutting CLI concerns owned by none of the three) without becoming a fourth component itself — `bcs` contains no business logic of its own, only dispatch, environment diagnostics, and configuration validation. See [ADR-0006](docs/decisions/0006-bcs-unified-cli-architecture.md) for why one CLI rather than one per component, and [docs/CLI.md](docs/CLI.md) for the complete design: commands, global options, exit codes, and the plugin mechanism third parties use to extend it without modifying `bcs` itself.

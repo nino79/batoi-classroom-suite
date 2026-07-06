@@ -19,12 +19,12 @@ gitGraph
     commit id: "propose ADR-0003"
     checkout main
     merge "adr/clonezilla-alternatives" id: "PR #13 merged"
-    branch "feat/builder-manifest-schema"
-    checkout "feat/builder-manifest-schema"
-    commit id: "draft schema"
+    branch "feat/deploy-multicast-retry"
+    checkout "feat/deploy-multicast-retry"
+    commit id: "draft retry logic"
     commit id: "address review"
     checkout main
-    merge "feat/builder-manifest-schema" id: "PR #14 merged"
+    merge "feat/deploy-multicast-retry" id: "PR #14 merged"
 ```
 
 Branch names follow `type/short-description`, per [naming-conventions.md](../standards/naming-conventions.md#git-branches).

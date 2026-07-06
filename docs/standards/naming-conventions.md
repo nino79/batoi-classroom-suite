@@ -23,6 +23,7 @@ Fixed prefixes, defined in [SPECIFICATION.md](../../SPECIFICATION.md) — do not
 | `BLD-NNN` | Builder requirements |
 | `DEP-NNN` | Deploy requirements |
 | `NFR-NNN` | Non-functional requirements |
+| `CLI-NNN` | `bcs` command-line interface requirements |
 
 `NNN` is a zero-padded 3-digit sequential number per prefix, never reused even if a requirement is later removed (removed IDs are marked as retired in `SPECIFICATION.md`, not recycled).
 
@@ -33,7 +34,7 @@ Pattern: `type/short-description`, matching the Conventional Commits type it pri
 ```
 docs/boot-manager-fallback-clarify
 adr/clonezilla-alternatives
-feat/builder-manifest-schema
+feat/deploy-multicast-retry
 fix/deploy-checksum-mismatch
 ```
 
@@ -65,11 +66,11 @@ See [bash-style-guide.md](bash-style-guide.md) for full context; naming rules sp
 |---|---|---|
 | Functions, local variables | `lower_snake_case` | `validate_recipe`, `image_path` |
 | Constants, environment/exported variables | `UPPER_SNAKE_CASE` | `readonly MAX_RETRIES=3` |
-| Private/internal functions | `_leading_underscore` | `_parse_manifest_header` |
+| Private/internal functions | `_leading_underscore` | `_parse_config_header` |
 
-## Configuration and Recipe Keys
+## Configuration Keys
 
-Builder recipe/manifest keys (once the schema is defined, per [docs/architecture/builder.md](../architecture/builder.md#open-questions)) use `snake_case`, consistent with Bash variable naming so recipe values can be sourced directly into scripts without a translation layer.
+**This section supersedes earlier guidance.** BCS's YAML configuration (`config/schema.yaml`, formalized in [docs/CONFIGURATION.md](../CONFIGURATION.md) and [ADR-0005](../decisions/0005-yaml-as-unified-configuration-format.md)) uses `camelCase` keys throughout (`bootManager`, `menuTimeoutSeconds`, `pinnedSnapshot`), matching Kubernetes and Docker Compose convention rather than Bash's `snake_case`. An earlier version of this document assumed recipe keys would be sourced directly into Bash as environment variables and should therefore be `snake_case` — that assumption predated the configuration format actually being designed and is now incorrect. Any Bash code that reads configuration values is expected to go through an explicit access layer (e.g., a `yq`/`jq`-style query, or a small parsing function), not by sourcing the YAML file directly as shell variables, so there is no longer a reason to constrain YAML key casing to Bash's naming rules.
 
 ## Machine Identifiers
 
