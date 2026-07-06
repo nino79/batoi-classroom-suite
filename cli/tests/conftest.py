@@ -9,7 +9,9 @@ import pytest
 import yaml
 from rich.console import Console
 
-FIXTURE_ROOT = Path(__file__).parent / "fixtures"
+# The captured-tool-output fixture corpus root lives in fixture_utils.FIXTURES_ROOT
+# (tests/fixtures/ - see its README.md); load fixtures through that module's
+# helpers, not with ad hoc paths from here.
 
 
 @pytest.fixture

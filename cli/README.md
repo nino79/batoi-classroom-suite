@@ -58,8 +58,11 @@ cli/
 │   ├── model_utils.py       # shared Pydantic extensibility helper (x- extra-key rule)
 │   ├── config/              # ClassroomConfig loading, Pydantic models, validation
 │   ├── inventory/            # Host Inventory subsystem: models, collectors, service
+│   ├── platform/             # Platform Layer: CommandRunner, CommandResult, adapters/
 │   └── commands/            # one module per command
 └── tests/                  # pytest suite, one file per module/command
+    ├── fixtures/               # captured-tool-output corpus for adapter tests (see its README)
+    └── fixture_utils.py        # shared helpers for loading that corpus
 ```
 
 See [`../docs/repository-organization.md`](../docs/repository-organization.md) for how this directory fits into the rest of the repository.

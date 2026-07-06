@@ -86,7 +86,8 @@ batoi-classroom-suite/
 ├── cli/                       # bcs CLI — implemented (Python), see docs/CLI.md and ADR-0007
 │   ├── pyproject.toml             # packaging + ruff/mypy/pytest configuration
 │   ├── src/bcs/                   # the bcs package
-│   └── tests/                     # its pytest suite
+│   └── tests/                     # its pytest suite; tests/fixtures/ is the captured
+│                                  # tool-output corpus for Platform Layer adapter tests
 │
 ├── config/                   # The configuration contract components are built against
 │   ├── schema.yaml               # Normative JSON Schema (docs/CONFIGURATION.md)
