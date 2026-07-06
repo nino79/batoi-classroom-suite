@@ -1,15 +1,14 @@
 """Immutable data models for the Platform Layer.
 
 ``CommandResult`` is the outcome of one process execution, produced by
-:class:`~bcs.platform.execution.CommandRunner` (not yet implemented -
-see the module docstring of :mod:`bcs.platform`). This module contains
+:class:`~bcs.platform.execution.CommandRunner`. This module contains
 **only the model** - no execution logic, no ``subprocess`` usage, no
 adapters. Per ``docs/PLATFORM_LAYER.md``'s "structured in, structured
 out" design principle, a ``CommandResult`` is the *only* thing a
 caller of the Platform Layer ever sees on success (or on a non-zero
 exit when ``check`` is false); every other exit path is a typed
-exception in ``bcs.platform.errors`` (not yet implemented), never a
-raw ``subprocess.CompletedProcess`` or ``OSError``.
+exception in :mod:`bcs.platform.errors`, never a raw
+``subprocess.CompletedProcess`` or ``OSError``.
 
 ``CommandResult`` is **frozen**: it is a point-in-time record of one
 already-finished (or already-killed) process invocation, never a live
@@ -36,8 +35,8 @@ class CommandResult(BaseModel):
 
     Every field here is populated by whichever
     :class:`~bcs.platform.execution.CommandRunner` implementation
-    produced this result (not yet implemented); this model has no
-    knowledge of *how* a result came to be, only what happened.
+    produced this result; this model has no knowledge of *how* a
+    result came to be, only what happened.
 
     ``exit_code`` and ``timed_out`` are linked by construction: a
     killed-on-timeout process has no real exit code to report, and a

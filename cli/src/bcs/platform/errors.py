@@ -16,9 +16,8 @@ wants a specific process exit code; the Platform Layer itself never
 does that translation.
 
 This module defines the exceptions only - no execution logic, no
-``subprocess`` usage. Nothing here is raised yet:
-:class:`~bcs.platform.execution.CommandRunner` (Platform-001, a later
-part) is what will actually raise these.
+``subprocess`` usage. They are raised by
+:class:`~bcs.platform.execution.SubprocessCommandRunner`.
 """
 
 from __future__ import annotations
