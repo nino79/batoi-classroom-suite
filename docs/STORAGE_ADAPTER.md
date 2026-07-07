@@ -1,6 +1,6 @@
 # Storage Adapter — Design Proposal (Block Storage, Partitions, Filesystems)
 
-> **Status: Accepted; models, errors, and parser implemented.** This document is the authoritative design for the Storage Adapter, the second Host Discovery adapter in BCS's Platform Layer. It follows the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md). **Implemented:** `BlockDevice`/`Partition`/`FilesystemInfo`/`MountEntry`/`StorageConfiguration` (`cli/src/bcs/platform/adapters/storage/models.py`, per [§ Pydantic Models](#pydantic-models)); `StorageError`/`StorageUnavailableError`/`StorageParseError` (`cli/src/bcs/platform/adapters/storage/errors.py`, per [§ Error Hierarchy](#error-hierarchy)); `parse_storage_topology` (`cli/src/bcs/platform/adapters/storage/parser.py`, per [§ Parser Architecture](#parser-architecture)). **Not yet implemented:** `adapter.py` — remains subject to the same review process before its own implementation begins.
+> **Status: Accepted; fully implemented.** This document is the authoritative design for the Storage Adapter, the second Host Discovery adapter in BCS's Platform Layer. It follows the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md). **Implemented:** `BlockDevice`/`Partition`/`FilesystemInfo`/`MountEntry`/`StorageConfiguration` (`cli/src/bcs/platform/adapters/storage/models.py`, per [§ Pydantic Models](#pydantic-models)); `StorageError`/`StorageUnavailableError`/`StorageParseError` (`cli/src/bcs/platform/adapters/storage/errors.py`, per [§ Error Hierarchy](#error-hierarchy)); `parse_storage_topology` (`cli/src/bcs/platform/adapters/storage/parser.py`, per [§ Parser Architecture](#parser-architecture)); `read_storage_topology` (`cli/src/bcs/platform/adapters/storage/adapter.py`, per [§ Adapter Responsibilities](#adapter-responsibilities)) — the complete adapter as designed in this document.
 
 ## Purpose
 
@@ -35,10 +35,9 @@ cli/src/bcs/platform/adapters/
     │                              # NOT named "lsblk": the package survives
     │                              # a future backend swap (libblkid, sysfs direct, ...)
     ├── __init__.py                # [implemented] re-exports StorageConfiguration, BlockDevice,
-    │                              # Partition, FilesystemInfo, MountEntry (models only so far;
-    │                              # will also re-export parse_storage_topology,
+    │                              # Partition, FilesystemInfo, MountEntry, parse_storage_topology,
     │                              # read_storage_topology, StorageError, StorageUnavailableError,
-    │                              # StorageParseError once those modules exist)
+    │                              # StorageParseError
     ├── models.py                  # [implemented] BlockDevice, Partition, FilesystemInfo,
     │                              # MountEntry, StorageConfiguration
     │                              # (frozen, JSON-serializable) - see § Pydantic Models
@@ -47,8 +46,10 @@ cli/src/bcs/platform/adapters/
     │                              # (pure function, no subprocess, no CommandRunner, no
     │                              # PlatformError hierarchy - raises plain ValueError, mirroring
     │                              # the EFI parser exactly - see § Parser Architecture)
-    ├── adapter.py                 # [not yet implemented] read_storage_topology(runner: CommandRunner) ->
-    │                              # StorageConfiguration (only calls runner.run())
+    ├── adapter.py                 # [implemented] read_storage_topology(runner: CommandRunner) ->
+    │                              # StorageConfiguration - the only place this package calls
+    │                              # CommandRunner.run(), and the only place that knows the
+    │                              # current backend is lsblk/blkid/findmnt
     └── errors.py                  # [implemented] StorageError(PlatformError),
                                     # StorageUnavailableError, StorageParseError
 ```
@@ -164,16 +165,20 @@ The parser accepts three separate text inputs (one per tool) rather than a singl
 
 ## Adapter Responsibilities
 
-The adapter (`adapter.py`) is the only module that knows about `CommandRunner`:
+**Implemented** (`cli/src/bcs/platform/adapters/storage/adapter.py`; see `cli/tests/test_platform_adapters_storage_adapter.py` for the corresponding test coverage). The adapter (`adapter.py`) is the only module that knows about `CommandRunner`:
 
 ```python
-def read_storage_topology(runner: CommandRunner) -> StorageConfiguration:
+def read_storage_topology(
+    runner: CommandRunner,
+    *,
+    timeout_seconds: float | None = 10.0,
+) -> StorageConfiguration:
     ...
 ```
 
 ### Command Execution
 
-The adapter executes three commands in sequence:
+The adapter executes three commands in sequence, stopping (and raising) at the first failure rather than running the remaining tools:
 
 | # | Command | Timeout | Rationale |
 |---|---------|---------|-----------|
@@ -181,18 +186,19 @@ The adapter executes three commands in sequence:
 | 2 | `blkid -p -o json` | 10s | Filesystem metadata for all block devices |
 | 3 | `findmnt -J` | 10s | Mount topology |
 
-All three commands are **read-only** and have no side effects. Locale is forced to `LANG=C LC_ALL=C` via the CommandRunner's environment (standard Platform Layer behavior).
+All three commands are **read-only** and have no side effects. Locale is forced to `LANG=C LC_ALL=C` via the CommandRunner's environment (standard Platform Layer behavior), built once and reused for all three calls. `timeout_seconds` is one parameter applied identically to all three invocations, per the uniform 10s budget above (a single value, not three independently-tunable ones) — mirroring the EFI adapter's own single-parameter simplicity.
 
 ### Error Mapping
 
-| Tool Failure | Adapter Action |
-|-------------|----------------|
-| `lsblk` not found | Raise `StorageUnavailableError("lsblk not found")` |
-| `blkid` not found | Raise `StorageUnavailableError("blkid not found")` |
-| `findmnt` not found | Raise `StorageUnavailableError("findmnt not found")` |
-| Tool exits non-zero | Raise `StorageError(f"{tool} exited with {exit_code}")` |
-| Tool times out | Raise `CommandTimeoutError` (from Platform Layer) |
-| Parser raises exception | Wrap in `StorageParseError` |
+**Amended during implementation, to match the EFI adapter's own precedent exactly** (`bcs.platform.adapters.efi.adapter`): `CommandNotFoundError`/`CommandTimeoutError` — raised by `CommandRunner.run()` itself when a tool is missing from `PATH` or exceeds its timeout — propagate **unchanged**, the same choice the EFI adapter already made for `efibootmgr`. This reading is also the one consistent with `StorageUnavailableError`'s own docstring (`errors.py`): "one or more of the required tools *is present and executable*, but the environment cannot provide usable storage data" — a tool missing from `PATH` entirely is a different, already-typed condition, not this adapter's to re-wrap. `StorageUnavailableError` is instead used the way `FirmwareBootUnavailableError` is: for a non-zero exit whose `stderr` recognisably indicates an environment problem (permission denied, a vanished device node, etc.), checked via a pattern set analogous to the EFI adapter's own `_is_unavailable`.
+
+| Condition | Adapter action |
+|---|---|
+| `lsblk`/`blkid`/`findmnt` not on `PATH` | `CommandNotFoundError` — raised automatically by `CommandRunner`; the adapter does no translation. |
+| A tool's `runner.run()` call exceeds its timeout | `CommandTimeoutError` — raised automatically by `CommandRunner`, propagated unchanged. |
+| A tool exits non-zero, `stderr` recognisably indicates the environment cannot provide storage data | `StorageUnavailableError`, carrying the full result. |
+| A tool exits non-zero, not recognisable as the above | `StorageError` (the base class itself), carrying the full result. |
+| All three tools succeed but `parse_storage_topology` raises `ValueError` | `StorageParseError`, chained (`raise ... from exc`) from the original `ValueError`. |
 
 ### Partition Type GUID
 
@@ -248,14 +254,13 @@ Representative hardware scenarios (the three with real-corpus placeholders reser
 
 Each is a triple of outputs (one per tool) corresponding to the same system state, so cross-referencing tests can verify correct merging. **Malformed output** (truncated JSON, missing fields, unexpected structure) is deliberately tested only via the synthetic corpus, not as real-corpus placeholders — malformed output is not something a healthy real system produces to capture, mirroring how the EFI Adapter's own malformed-line scenarios were never added to `cli/tests/fixtures/firmware/`'s inventory either.
 
-### Integration Tests (adapter)
+### Unit Tests (adapter) — implemented
 
-The adapter is tested against a controlled Linux environment (CI with loop devices or a VM snapshot):
+`read_storage_topology` is covered by `cli/tests/test_platform_adapters_storage_adapter.py`, following exactly the same `FakeCommandRunner`-based philosophy as `test_platform_adapters_efi_adapter.py` (a configurable stand-in for `CommandRunner`, keyed by tool name here since three tools are involved, never a mock of `SubprocessCommandRunner`, zero real subprocess execution): correct commands/arguments/order, `check=False` and locale-forced `env` (with `PATH` preserved) on every call, timeout forwarded identically to all three calls (including the `10.0` default and an explicit `None`), a correctly-parsed `StorageConfiguration` on success, `CommandNotFoundError`/`CommandTimeoutError` propagating unchanged from whichever of the three tools raises them, that no further tool runs once one has failed, `StorageUnavailableError` for each recognised "environment unavailable" `stderr` pattern from each of the three tools, `StorageError` for an unrecognised non-zero exit, and `StorageParseError` — with `__cause__` preserved — when parsing fails.
 
-- All three tools present and working → full `StorageConfiguration` returned
-- One tool missing → appropriate `StorageUnavailableError`
-- One tool returns non-zero → appropriate `StorageError`
-- Timeout → `CommandTimeoutError` propagated from Platform Layer
+### Integration Tests (real environment) — not implemented
+
+The adapter is not yet tested against a controlled Linux environment (CI with loop devices or a VM snapshot) — mirroring the EFI adapter's own "real end-to-end, optional, environment-gated" test, which is also not implemented. Recorded here as a future addition, not required for this implementation.
 
 ### Contract Tests
 

@@ -43,6 +43,6 @@ You do not need an ADR for routine documentation fixes, wording clarifications, 
 | [0008](0008-host-inventory-ports-and-adapters.md) | Host Inventory as an immutable, ports-and-adapters core domain | Accepted |
 | [0009](0009-platform-layer-command-runner.md) | Platform Layer as the sole path to process execution | Accepted |
 | [0010](0010-efi-adapter-read-only-scope.md) | EFI adapter — read-only, domain-named firmware boot configuration integration | Accepted |
-| [0011](0011-host-discovery-orchestrator.md) | Host Discovery Orchestrator — coordinating discovery adapters into Host Inventory | Proposed |
+| [0011](0011-host-discovery-orchestrator.md) | Host Discovery Orchestrator — coordinating discovery adapters into Host Inventory | Accepted |
 
 This index should be kept in sync with the files in this directory whenever an ADR is added or its status changes.

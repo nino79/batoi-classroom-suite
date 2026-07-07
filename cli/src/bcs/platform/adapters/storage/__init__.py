@@ -6,20 +6,15 @@ second Host Discovery adapter, following the same architecture as
 ``bcs.platform.adapters.efi`` (see
 ``docs/decisions/0010-efi-adapter-read-only-scope.md``).
 
-Implemented so far: the immutable domain models
+Implemented: the immutable domain models
 (:mod:`bcs.platform.adapters.storage.models`), the domain-specific
-error hierarchy (:mod:`bcs.platform.adapters.storage.errors`), and the
-pure parser (:mod:`bcs.platform.adapters.storage.parser`). Per the
-accepted design, this package will eventually also contain:
-
-- ``adapter.py`` - ``read_storage_topology(runner: CommandRunner) ->
-  StorageConfiguration``, the only place this package calls
-  ``CommandRunner.run()``.
-
-Nothing in this package executes a process or imports
-``subprocess``/``CommandRunner`` at this stage.
+error hierarchy (:mod:`bcs.platform.adapters.storage.errors`), the pure
+parser (:mod:`bcs.platform.adapters.storage.parser`), and the
+orchestration adapter (:mod:`bcs.platform.adapters.storage.adapter`) -
+the complete adapter as designed in ``docs/STORAGE_ADAPTER.md``.
 """
 
+from bcs.platform.adapters.storage.adapter import read_storage_topology
 from bcs.platform.adapters.storage.errors import (
     StorageError,
     StorageParseError,
@@ -44,4 +39,5 @@ __all__ = [
     "StorageParseError",
     "StorageUnavailableError",
     "parse_storage_topology",
+    "read_storage_topology",
 ]

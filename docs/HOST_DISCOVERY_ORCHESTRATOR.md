@@ -1,6 +1,6 @@
 # Host Discovery Orchestrator — Design Proposal (Coordinating Discovery Adapters into Host Inventory)
 
-> **Status: Proposed, pending approval.** This document designs the Host Discovery Orchestrator: the component that coordinates every Host Discovery adapter (Platform Layer adapters and legacy `sysfs`-based collectors alike) and aggregates their output into a form consumable by [Host Inventory](HOST_INVENTORY.md). Nothing described here is implemented. See [ADR-0011](decisions/0011-host-discovery-orchestrator.md) (status: `Proposed`) for the architectural decision this document expands.
+> **Status: Accepted; data-holding types implemented (Part 1).** This document designs the Host Discovery Orchestrator: the component that coordinates every Host Discovery adapter (Platform Layer adapters and legacy `sysfs`-based collectors alike) and aggregates their output into a form consumable by [Host Inventory](HOST_INVENTORY.md). See [ADR-0011](decisions/0011-host-discovery-orchestrator.md) (status: `Accepted`) for the architectural decision this document expands. **Implemented:** `HostDiscoveryAdapters` and `HostDiscoverySnapshot` (`cli/src/bcs/inventory/discovery/models.py`, per [§ Public API](#public-api)) — the two data-holding types only. **Not yet implemented:** `HostDiscoveryOrchestrator` itself, composition-root wiring, `RuntimeContext` integration, and `bcs.inventory`/`bcs inventory` integration.
 
 ## Purpose
 
@@ -33,14 +33,20 @@ cli/src/bcs/inventory/
 ├── service.py                    # existing collect_host_inventory() - gains a dependency on
 │                                # the orchestrator; see § Relationship to Host Inventory
 └── discovery/                    # NEW - this design
-    ├── __init__.py                 # re-exports HostDiscoveryOrchestrator, HostDiscoveryAdapters,
-    │                              # HostDiscoverySnapshot
-    ├── adapters.py                  # HostDiscoveryAdapters - the frozen DI bundle of
-    │                              # already-bound, zero-argument adapter callables
-    ├── snapshot.py                   # HostDiscoverySnapshot (frozen, JSON-serializable) -
-    │                              # this component's only output type
-    └── orchestrator.py               # HostDiscoveryOrchestrator - the coordination logic
+    ├── __init__.py                 # [implemented] re-exports HostDiscoveryAdapters,
+    │                              # HostDiscoverySnapshot (will also re-export
+    │                              # HostDiscoveryOrchestrator once orchestrator.py exists)
+    ├── models.py                    # [implemented] HostDiscoveryAdapters (the frozen DI bundle
+    │                              # of already-bound, zero-argument adapter callables) and
+    │                              # HostDiscoverySnapshot (frozen, JSON-serializable, this
+    │                              # component's only output type) - both data-holding types,
+    │                              # consolidated into one module since neither has execution
+    │                              # or coordination logic of its own
+    └── orchestrator.py               # [not yet implemented] HostDiscoveryOrchestrator -
+                                     # the coordination logic
 ```
+
+**A structural refinement from this document's original sketch, flagged rather than silently done:** the Public API section below originally proposed `adapters.py`/`snapshot.py` as two separate modules. The actual implementation consolidates both into a single `models.py` — the same "one module per distinct concern" reasoning that split `bcs.platform.adapters.efi` into four files doesn't apply as strongly here, since neither `HostDiscoveryAdapters` nor `HostDiscoverySnapshot` contains any logic (execution, coordination, or otherwise) to keep separate from the other; they are both plain data-holding types. The public import surface (`from bcs.inventory.discovery import HostDiscoveryAdapters, HostDiscoverySnapshot`) is unaffected either way.
 
 Organized as a small subpackage rather than a flat module for the same reason `bcs.platform.adapters.efi` was (see [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md), point 7): three distinct concerns (a DI bundle, an output model, coordination logic) benefit from separation, and the public import surface (`from bcs.inventory.discovery import HostDiscoveryOrchestrator, ...`) is unaffected either way.
 
@@ -145,24 +151,26 @@ flowchart TB
 
 ## Public API
 
-### `HostDiscoveryAdapters` (`discovery/adapters.py`)
+### `HostDiscoveryAdapters` (`discovery/models.py`) — implemented
 
 A frozen `dataclass` (not a Pydantic model — it holds callables, not serializable data). Mirrors [`RuntimeContext`](../cli/src/bcs/context.py)'s own precedent exactly: a frozen bundle of collaborators, built once at the composition root. Every field is **optional** and defaults to `None`, meaning "no adapter wired in for this domain in this build" — never an error by itself; see [§ Error Propagation](#error-propagation).
 
 | Field | Type | Bound to (illustrative) | Status |
 |---|---|---|---|
 | `efi` | `Callable[[], FirmwareBootConfiguration] \| None` | `functools.partial(read_firmware_boot_configuration, runner=command_runner)` | Adapter implemented ([EFI_ADAPTER.md](EFI_ADAPTER.md)) |
-| `storage` | `Callable[[], StorageConfiguration] \| None` | `functools.partial(read_storage_topology, runner=command_runner)` | Adapter designed, models implemented, `adapter.py` not yet implemented ([STORAGE_ADAPTER.md](STORAGE_ADAPTER.md)) |
-| `secure_boot` | `Callable[[], object] \| None` *(type TBD)* | — | Not designed yet — see [§ Future Extensibility](#future-extensibility) |
+| `storage` | `Callable[[], StorageConfiguration] \| None` | `functools.partial(read_storage_topology, runner=command_runner)` | Adapter fully implemented ([STORAGE_ADAPTER.md](STORAGE_ADAPTER.md)) |
+| `secure_boot` | `Callable[[], object] \| None` *(type TBD)* | — | Designed ([SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md)), not implemented — this slot stays `object`-typed until a real `SecureBootStatus` model exists to reference |
 | `filesystem` | `Callable[[], object] \| None` *(type TBD)* | — | Not designed yet — see [§ Future Extensibility](#future-extensibility) for its boundary against `storage` |
-| `network` | `Callable[[], tuple[NetworkInterface, ...]] \| None` | `collectors.collect_network` (already zero-argument, no binding needed) | Existing `sysfs`-based collector, reused as-is |
+| `network` | `Callable[[], list[NetworkInterface]] \| None` | `collectors.collect_network` (already zero-argument, no binding needed) | Existing `sysfs`-based collector, reused as-is |
 | `cpu` | `Callable[[], CpuInfo] \| None` | `collectors.collect_cpu` (already zero-argument, no binding needed) | Existing `sysfs`-based collector, reused as-is |
 | `memory` | `Callable[[], MemoryInfo] \| None` | `collectors.collect_memory` (already zero-argument, no binding needed) | Existing `sysfs`-based collector, reused as-is |
 | `tpm` | `Callable[[], object] \| None` *(type TBD)* | — | Not designed yet, and not currently motivated by any `SPECIFICATION.md` requirement — included because it was named as a target domain, not as a recommendation to build it next; see [§ Future Extensibility](#future-extensibility) |
 
+**Corrected during implementation:** `network` is typed `Callable[[], list[NetworkInterface]]`, not the `tuple[NetworkInterface, ...]` this table originally showed — matching `collectors.collect_network`'s actual, already-implemented return type (`list[NetworkInterface]`, per `bcs.inventory.models.HostInventory`). The original table's claim that this slot needs "no binding needed" was only true with the corrected type; a `tuple`-typed slot would have made that claim false under `mypy --strict`. This project's own architecture review of this document (finding 6) flagged the discrepancy before implementation reached it.
+
 Explicit, named, optional slots — not a dynamic registry keyed by string, and not a `Collector`-style protocol third parties register against. [docs/HOST_INVENTORY.md § Proposed Changes, item 4](HOST_INVENTORY.md#proposed-changes-requiring-approval) already considered and declined a dynamic collector registry, "since there is no concrete second contributor yet... exactly the kind of speculative flexibility [REVIEW.md §7] already argues against." The same reasoning applies here: all eight domains this orchestrator coordinates are already known and named (by this very design brief); a ninth arriving later is a small, reviewed, one-field addition to two data structures, not a runtime extension point.
 
-### `HostDiscoverySnapshot` (`discovery/snapshot.py`)
+### `HostDiscoverySnapshot` (`discovery/models.py`) — implemented
 
 A frozen, JSON-serializable Pydantic model — this component's **only** output type. Field-for-field, every payload field mirrors a `HostDiscoveryAdapters` slot exactly: whatever the bound callable returned, unmodified, or absent if that slot was unset or its call failed (see [§ Error Propagation](#error-propagation)). Like `CommandResult`, `FirmwareBootConfiguration`, and `StorageConfiguration`, it deliberately does **not** carry its own `schemaVersion` — it is never a `bcs` command's own top-level payload; it is always consumed by `bcs.inventory.service.collect_host_inventory()` on its way into `HostInventory` (see [§ Relationship to Host Inventory](#relationship-to-host-inventory)).
 
@@ -172,11 +180,13 @@ A frozen, JSON-serializable Pydantic model — this component's **only** output 
 | `storage_topology` | `storageTopology` | `StorageConfiguration \| None` | From the `storage` adapter slot. |
 | `secure_boot` | `secureBoot` | *(type TBD)* `\| None` | From the `secure_boot` slot; always `None` until that adapter exists. |
 | `filesystem` | `filesystem` | *(type TBD)* `\| None` | From the `filesystem` slot; always `None` until that adapter exists. |
-| `network` | `network` | `tuple[NetworkInterface, ...]` | From the `network` slot; empty tuple if unset. |
+| `network` | `network` | `tuple[NetworkInterface, ...]` | From the `network` slot; empty tuple if unset. Kept as `tuple` here (unlike the `list`-typed `HostDiscoveryAdapters.network` slot above) since the snapshot itself must stay immutable; converting `list` to `tuple` is the orchestrator's job. |
 | `cpu` | `cpu` | `CpuInfo \| None` | From the `cpu` slot. |
 | `memory` | `memory` | `MemoryInfo \| None` | From the `memory` slot. |
 | `tpm` | `tpm` | *(type TBD)* `\| None` | From the `tpm` slot; always `None` until that adapter exists. |
 | `caveats` | `caveats` | `tuple[str, ...]` | One entry per domain whose adapter was wired in but raised a `PlatformError` when called — see [§ Error Propagation](#error-propagation). Empty tuple if every wired adapter succeeded (or none were wired at all). |
+
+**Hashability, verified during implementation:** a `HostDiscoverySnapshot` is hashable only when `network` is empty. `NetworkInterface` (`bcs.inventory.models`) carries its own `ip_addresses: list[str]` field, and a `list`-typed field is never hashable *by type*, independent of whether it happens to be empty — so any snapshot whose `network` tuple contains at least one `NetworkInterface` raises `TypeError` on `hash()`, matching `HostInventory`'s own already-documented same limitation.
 
 ### `HostDiscoveryOrchestrator` (`discovery/orchestrator.py`)
 
@@ -291,8 +301,8 @@ For each non-`None` slot in `HostDiscoveryAdapters`, `discover()`:
 
 | Layer | What it verifies | How |
 |---|---|---|
-| `HostDiscoveryAdapters` | Construction, defaults (every slot `None`) — a plain dataclass, little to test beyond that it holds what it's given. | Direct unit tests, no fixtures. |
-| `HostDiscoverySnapshot` | Construction, defaults, frozen/extra-forbid, equality, hashability (every field is either a frozen model, `None`, or a tuple of hashable items — `caveats` being a tuple of strings does not break hashability), JSON round-tripping (including nested adapter models). | Direct unit tests, mirroring `test_platform_adapters_efi_models.py`/`test_platform_adapters_storage_models.py`'s own style exactly — no fixtures, no mocking. |
+| `HostDiscoveryAdapters` **(implemented)** | Construction, defaults (every slot `None`), all slots bound, frozen (assignment raises), equality, hashability (a frozen dataclass of `Callable \| None` fields hashes by reference, unaffected by what a bound callable would return if called). | Direct unit tests, no fixtures — see `cli/tests/test_inventory_discovery_models.py`. |
+| `HostDiscoverySnapshot` **(implemented)** | Construction, defaults, `populate_by_name` aliases, frozen/extra-forbid, opaque `object`-typed `secure_boot`/`filesystem`/`tpm` values, equality, JSON round-tripping (including nested models), and hashability's actual, verified boundary: hashable whenever `network` is empty; raises `TypeError` whenever it contains at least one `NetworkInterface`, since that model's own `ip_addresses: list[str]` field is never hashable *by type* regardless of content — corrected from this table's own earlier, untested claim that an empty-`ip_addresses` interface would hash cleanly. | Direct unit tests, mirroring `test_platform_adapters_efi_models.py`/`test_platform_adapters_storage_models.py`'s own style exactly — no fixtures, no mocking. `discovery/models.py` is at 100% statement and branch coverage. |
 | `HostDiscoveryOrchestrator.discover()` | Every slot populated → every `HostDiscoverySnapshot` field populated; every slot `None` → every field absent/empty and `caveats` empty; a slot's callable raising a `PlatformError` subclass → that field `None`, one matching `caveats` entry, *and* every other slot still populated (the isolation property, [§ Error Propagation](#error-propagation) point 3); a slot's callable raising a non-`PlatformError` → propagates out of `discover()` uncaught. | `HostDiscoveryAdapters` built entirely from stub `lambda`s/plain functions — no `FakeCommandRunner`, no real adapter, no mocking of anything. This is the main coverage burden for this component, and it needs none of the machinery any individual adapter's own tests need. |
 | Integration with real adapter signatures | That `functools.partial(read_firmware_boot_configuration, runner=...)`-style binding actually produces a callable matching `HostDiscoveryAdapters.efi`'s declared type, end to end. | A handful of cases, each using `FakeCommandRunner` (already established for adapter-level tests) bound the same way the composition root is expected to bind it — confirms the *seam*, not the adapter's own parsing/execution logic, which remains each adapter's own test suite's responsibility and must not be duplicated here. |
 | `bcs.inventory.service.collect_host_inventory(orchestrator)` | Correctly combines `orchestrator.discover()`'s result with `collect_identity()`/`collect_tooling()` into one `HostInventory`. | Existing test style (mocked collectors, per [docs/HOST_INVENTORY.md § Testing Strategy](HOST_INVENTORY.md#testing-strategy)), extended with a stub/fake orchestrator the same way `command_runner` is already substitutable via `conftest.py`'s `make_runtime_context` fixture. |

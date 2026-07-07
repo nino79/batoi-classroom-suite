@@ -1,6 +1,6 @@
 # ADR-0011: Host Discovery Orchestrator — Coordinating Discovery Adapters into Host Inventory
 
-**Status:** Proposed
+**Status:** Accepted
 
 ## Context
 
@@ -34,5 +34,5 @@ Beyond the two adapters that exist today, this project anticipates several more 
 - `bcs.inventory.collectors.collect_cpu`/`collect_memory`/`collect_network` need **no signature change** to participate — they are already zero-argument functions and satisfy `HostDiscoveryAdapters`' callable shape as-is. Only tool-based adapters (`efi`, and later `storage`, `secure_boot`, `filesystem`, `tpm`) need explicit binding to a `CommandRunner` at the composition root.
 - `RuntimeContext` is expected to gain a `host_discovery_orchestrator` field, the same treatment `command_runner` received in Platform-001 Part 4 — a real, additive change to an already-implemented, frozen dataclass, not yet made.
 - `HostInventory`'s own schema is **not** changed by this ADR. A follow-up proposal (amending [docs/HOST_INVENTORY.md](../HOST_INVENTORY.md), likely as an ADR-0008 amendment, mirroring its EFI System Partition/USB Storage precedent) is required before `bcs inventory`'s JSON output reflects any Discovery adapter's data. Accepting this ADR does not itself approve that follow-up.
-- This ADR's acceptance approves the architecture described in [docs/HOST_DISCOVERY_ORCHESTRATOR.md](../HOST_DISCOVERY_ORCHESTRATOR.md). **None of it is implemented.** Implementation remains gated on a separate, explicit go-ahead before any `.py` file is touched, per this project's established pattern for adapter designs ([ADR-0009](0009-platform-layer-command-runner.md), [ADR-0010](0010-efi-adapter-read-only-scope.md)).
+- This ADR's acceptance approves the architecture described in [docs/HOST_DISCOVERY_ORCHESTRATOR.md](../HOST_DISCOVERY_ORCHESTRATOR.md). **Implemented so far (Part 1 — data-holding types only):** `HostDiscoveryAdapters` and `HostDiscoverySnapshot` (`cli/src/bcs/inventory/discovery/models.py`). **Not yet implemented:** `HostDiscoveryOrchestrator` itself (`orchestrator.py`), the composition-root wiring that would bind real adapter callables into `HostDiscoveryAdapters`, `RuntimeContext` integration, and `bcs.inventory`/`bcs inventory` integration — each remains gated on its own separate, explicit go-ahead, per this project's established pattern for adapter designs ([ADR-0009](0009-platform-layer-command-runner.md), [ADR-0010](0010-efi-adapter-read-only-scope.md)).
 - **No effect on already-accepted architecture.** `bcs.platform.models.CommandResult`, the `PlatformError` hierarchy, `bcs.platform.execution.CommandRunner`/`SubprocessCommandRunner`, `bcs.context.RuntimeContext.command_runner`, `bcs.inventory.models.HostInventory`'s existing fields, and both adapters' own already-accepted designs (`FirmwareBootConfiguration`/`BootEntry`, and the Storage Adapter's implemented models) are unchanged — this ADR only adds a new, additive coordination layer beneath them.
