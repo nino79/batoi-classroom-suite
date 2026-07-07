@@ -1,6 +1,6 @@
 # Secure Boot Adapter — Design Proposal (Firmware Secure Boot State, Host Discovery)
 
-> **Status: Accepted; domain models implemented (Part 1).** This document is the authoritative design for the Secure Boot Adapter, the third Host Discovery adapter in BCS's Platform Layer, following the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md) (`Accepted`, implemented) and the [Storage Adapter](STORAGE_ADAPTER.md) (`Accepted`, models implemented). **Implemented:** `SecureBootState`/`SecureBootStatus` (`cli/src/bcs/platform/adapters/secureboot/models.py`), per [§ Domain Models](#domain-models). **Not yet implemented:** `parser.py`, `adapter.py`, `errors.py`, `RuntimeContext` integration, and Host Discovery integration. See [§ ADR Recommendation](#adr-recommendation) for why this document concludes no new ADR is required.
+> **Status: Accepted; domain models and parser implemented (Parts 1–2).** This document is the authoritative design for the Secure Boot Adapter, the third Host Discovery adapter in BCS's Platform Layer, following the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md) (`Accepted`, implemented) and the [Storage Adapter](STORAGE_ADAPTER.md) (`Accepted`, models implemented). **Implemented:** `SecureBootState`/`SecureBootStatus` (`cli/src/bcs/platform/adapters/secureboot/models.py`), per [§ Domain Models](#domain-models); and the pure parser, `parse_secure_boot_status` (`cli/src/bcs/platform/adapters/secureboot/parser.py`), per [§ Parser Strategy](#parser-strategy). **Not yet implemented:** `adapter.py`, `errors.py`, `RuntimeContext` integration, and Host Discovery integration. See [§ ADR Recommendation](#adr-recommendation) for why this document concludes no new ADR is required.
 
 ## Purpose
 
@@ -37,7 +37,7 @@ cli/src/bcs/platform/adapters/
     │                              # once implemented
     ├── models.py                    # [implemented] SecureBootState (enum), SecureBootStatus
     │                              # (frozen, JSON-serializable) - see § Domain Models
-    ├── parser.py                    # parse_secure_boot_status(text: str) ->
+    ├── parser.py                    # [implemented] parse_secure_boot_status(text: str) ->
     │                              # SecureBootStatus - a pure function; see
     │                              # § Parser Strategy for its independence guarantees
     ├── adapter.py                   # read_secure_boot_status(runner: CommandRunner) ->
@@ -86,6 +86,8 @@ classDiagram
 Both models are **frozen** (`frozen=True, extra="forbid"`), matching every other model in `bcs.platform`. `SecureBootStatus` carries no `schemaVersion` of its own, for the same reason `FirmwareBootConfiguration`/`StorageConfiguration` don't: it is never a `bcs` command's own top-level payload.
 
 ## Parser Strategy
+
+**Implemented** (`cli/src/bcs/platform/adapters/secureboot/parser.py`; see `cli/tests/test_platform_adapters_secureboot_parser.py` for the corresponding test coverage, including an AST-based import-purity check mirroring the EFI/Storage parsers' own).
 
 `parser.parse_secure_boot_status(text: str) -> SecureBootStatus` is a **pure function**, with the same independence guarantees already established for the EFI Adapter's parser ([docs/EFI_ADAPTER.md § Parser Architecture](EFI_ADAPTER.md#parser-architecture)):
 
@@ -179,7 +181,7 @@ This adapter follows the Platform Layer's locale policy in full — see [docs/PL
 | Layer | What it verifies | How |
 |---|---|---|
 | `models.SecureBootStatus`/`SecureBootState` **(implemented)** | Construction, defaults, immutability, equality, hashability, JSON serialization/deserialization round-tripping (including alias names), and independence from `bcs.inventory.models.SecureBootState` (same values, distinct type). | Direct unit tests, no fixtures or mocking needed — mirroring `test_platform_adapters_efi_models.py`. See `cli/tests/test_platform_adapters_secureboot_models.py`; `secureboot/models.py` is at 100% statement and branch coverage. |
-| `parser.parse_secure_boot_status` | Every line pattern individually and combined; permissive handling of unrecognized lines; absent `SetupMode` line; each malformed-mandatory-field rejection (`SecureBoot`, `SetupMode`) with its line-number-and-line-text message; the AST-based import-purity check already established for the EFI parser's own test module. | Direct unit tests, using fixtures loaded via `fixture_utils.py`. Given the corpus is real-capture-only and starts empty (see [§ Fixtures Strategy](#fixtures-strategy)), initial tests build a `tmp_path`-rooted synthetic corpus mirroring the real one's layout, exactly as `test_platform_adapters_efi_parser.py` did before real `efibootmgr` captures existed — see that module for the precedent this one is expected to follow. |
+| `parser.parse_secure_boot_status` **(implemented)** | Every line pattern individually and combined; permissive handling of unrecognized lines, blank lines, internal whitespace, and CRLF line endings; absent `SetupMode` line; empty input; a later duplicate line overwriting an earlier one; each malformed-mandatory-field rejection (`SecureBoot`, `SetupMode`) with its line-number-and-line-text message; that no input ever produces `state=UNSUPPORTED` (reserved for the future adapter layer, never this parser); the AST-based import-purity check already established for the EFI parser's own test module. | Direct unit tests, using fixtures loaded via `fixture_utils.py`. Given the corpus is real-capture-only and starts empty (see [§ Fixtures Strategy](#fixtures-strategy)), tests build a `tmp_path`-rooted synthetic corpus mirroring the real one's layout, exactly as `test_platform_adapters_efi_parser.py` did before real `efibootmgr` captures existed. See `cli/tests/test_platform_adapters_secureboot_parser.py`; `secureboot/parser.py` is at 100% statement and branch coverage. |
 | `adapter.read_secure_boot_status` | Correct command (`["mokutil", "--sb-state"]`), correct locale-forced `env`, correct explicit `timeout_seconds`, `check=False`, correct hand-off to the parser, and the adapter-level `SecureBootParseError` judgment (zero recognized lines). | `FakeCommandRunner` programmed to return a `CommandResult` wrapping fixture text as `stdout`. |
 | Error mapping | Each condition in [§ Error Mapping](#error-mapping) maps to the right exception. | `FakeCommandRunner` programmed to return/raise the corresponding failure shape. |
 | Real end-to-end (optional, environment-gated) | That the whole chain works against a real `mokutil` binary. | Skipped unless `mokutil` is on `PATH` and the platform is Linux — mirroring the EFI Adapter's own real-host test philosophy; expected to skip in CI. |
