@@ -10,9 +10,9 @@ orchestrator (not yet implemented - see that document's own
 - :class:`HostDiscoveryAdapters` - a frozen dependency-injection bundle
   of already-bound, zero-argument adapter callables, one named slot per
   Discovery domain. Built once, at the composition root
-  (``bcs.app.main()``, not yet wired), and passed to the orchestrator's
-  constructor - see
-  ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#dependency-injection-strategy``.
+  (``bcs.app.main()``), and passed to the orchestrator's constructor -
+  see
+  ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#dependency-injection-strategy---implemented``.
 - :class:`HostDiscoverySnapshot` - the frozen, JSON-serializable
   aggregate the orchestrator will produce - its only output type,
   deliberately distinct from ``HostInventory`` itself (which has

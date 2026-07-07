@@ -3,6 +3,8 @@ from __future__ import annotations
 import dataclasses
 
 from bcs.context import RuntimeContext
+from bcs.inventory.discovery.models import HostDiscoveryAdapters
+from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
 from bcs.platform.execution import CommandRunner, SubprocessCommandRunner
 
 
@@ -68,3 +70,26 @@ def test_command_runner_attribute_is_the_same_object_on_repeated_access(
     """The same instance is reused: repeated access never reconstructs it."""
     runtime = make_runtime_context()
     assert runtime.command_runner is runtime.command_runner
+
+
+# ---------------------------------------------------------------------------
+# Host Discovery Orchestrator Part 4: RuntimeContext integration
+# ---------------------------------------------------------------------------
+
+
+def test_runtime_context_exposes_a_host_discovery_orchestrator(make_runtime_context) -> None:
+    """RuntimeContext exposes a HostDiscoveryOrchestrator."""
+    runtime = make_runtime_context()
+    assert hasattr(runtime, "host_discovery_orchestrator")
+    assert isinstance(runtime.host_discovery_orchestrator, HostDiscoveryOrchestrator)
+
+
+def test_explicit_host_discovery_orchestrator_is_preserved_by_identity(
+    make_runtime_context,
+) -> None:
+    """A caller-supplied HostDiscoveryOrchestrator is stored as-is, not
+    copied or wrapped.
+    """
+    sentinel = HostDiscoveryOrchestrator(HostDiscoveryAdapters())
+    runtime = make_runtime_context(host_discovery_orchestrator=sentinel)
+    assert runtime.host_discovery_orchestrator is sentinel

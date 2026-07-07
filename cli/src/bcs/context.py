@@ -19,6 +19,7 @@ from rich.console import Console
 
 from bcs.config.loader import ConfigLoader
 from bcs.config.preferences import CliPreferences
+from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
 from bcs.logging_setup import LogFormat, LogLevel
 from bcs.output import OutputFormat
 from bcs.platform.execution import CommandRunner
@@ -35,6 +36,13 @@ class RuntimeContext:
     lifetime of the invocation, exactly like every other collaborator
     on this dataclass; there is no module-level singleton or service
     locator anywhere in the Platform Layer.
+
+    ``host_discovery_orchestrator`` receives the same treatment - see
+    ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#lifecycle---implemented``. It is built once,
+    in ``bcs.app``'s root callback, from a
+    :class:`~bcs.inventory.discovery.models.HostDiscoveryAdapters` bundle
+    whose tool-based slots are bound to the very same ``command_runner``
+    above - never a second, independently constructed one.
     """
 
     invocation_id: str
@@ -51,6 +59,7 @@ class RuntimeContext:
     config_loader: ConfigLoader
     preferences: CliPreferences
     command_runner: CommandRunner
+    host_discovery_orchestrator: HostDiscoveryOrchestrator
 
 
 __all__ = ["RuntimeContext"]

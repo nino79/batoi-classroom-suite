@@ -98,17 +98,20 @@ def make_runtime_context():
     from bcs.config.loader import ConfigLoader
     from bcs.config.preferences import CliPreferences
     from bcs.context import RuntimeContext
+    from bcs.inventory.discovery.models import HostDiscoveryAdapters
+    from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
     from bcs.logging_setup import LogFormat, LogLevel
     from bcs.output import OutputFormat
     from bcs.platform.execution import CommandRunner, SubprocessCommandRunner
 
-    def _factory(
+    def _factory(  # noqa: PLR0913 - a test factory's whole point is exposing every collaborator
         *,
         config_path: Path | None = None,
         output: OutputFormat = OutputFormat.TEXT,
         set_overrides: list[str] | None = None,
         env: dict[str, str] | None = None,
         command_runner: CommandRunner | None = None,
+        host_discovery_orchestrator: HostDiscoveryOrchestrator | None = None,
     ) -> RuntimeContext:
         console = Console(
             file=io.StringIO(), no_color=True, force_terminal=False, width=120, soft_wrap=True
@@ -137,6 +140,11 @@ def make_runtime_context():
             preferences=CliPreferences(),
             command_runner=(
                 command_runner if command_runner is not None else SubprocessCommandRunner()
+            ),
+            host_discovery_orchestrator=(
+                host_discovery_orchestrator
+                if host_discovery_orchestrator is not None
+                else HostDiscoveryOrchestrator(HostDiscoveryAdapters())
             ),
         )
 

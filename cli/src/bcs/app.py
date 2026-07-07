@@ -11,6 +11,7 @@ everything downstream receives them already built via
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 from collections.abc import Callable
 from importlib import metadata
@@ -30,8 +31,13 @@ from bcs.config.loader import ConfigLoader
 from bcs.config.preferences import load_preferences
 from bcs.context import RuntimeContext
 from bcs.exit_codes import ExitCode
+from bcs.inventory import collectors
+from bcs.inventory.discovery.models import HostDiscoveryAdapters
+from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
 from bcs.logging_setup import LogFormat, LogLevelOption, configure_logging, resolve_log_level
 from bcs.output import OutputFormat
+from bcs.platform.adapters.efi.adapter import read_firmware_boot_configuration
+from bcs.platform.adapters.storage.adapter import read_storage_topology
 from bcs.platform.execution import SubprocessCommandRunner
 from bcs.plugins import find_plugin, run_plugin, suggest_command
 from bcs.ulid import new_ulid
@@ -199,6 +205,19 @@ def main(  # noqa: PLR0913 - global options are inherently numerous; see docs/CL
     # service locator. See docs/PLATFORM_LAYER.md#dependency-injection.
     command_runner = SubprocessCommandRunner()
 
+    # Host Discovery adapters, bound once to the shared command_runner above
+    # - see docs/HOST_DISCOVERY_ORCHESTRATOR.md#dependency-injection-strategy---implemented.
+    # secure_boot/filesystem/tpm stay unset: no adapter.py exists yet for any
+    # of them (Secure Boot currently has only models.py/parser.py).
+    host_discovery_adapters = HostDiscoveryAdapters(
+        efi=functools.partial(read_firmware_boot_configuration, runner=command_runner),
+        storage=functools.partial(read_storage_topology, runner=command_runner),
+        network=collectors.collect_network,
+        cpu=collectors.collect_cpu,
+        memory=collectors.collect_memory,
+    )
+    host_discovery_orchestrator = HostDiscoveryOrchestrator(host_discovery_adapters)
+
     ctx.obj = RuntimeContext(
         invocation_id=invocation_id,
         console=console,
@@ -214,6 +233,7 @@ def main(  # noqa: PLR0913 - global options are inherently numerous; see docs/CL
         config_loader=loader,
         preferences=preferences,
         command_runner=command_runner,
+        host_discovery_orchestrator=host_discovery_orchestrator,
     )
 
     if ctx.invoked_subcommand is None:

@@ -1,6 +1,6 @@
 # Secure Boot Adapter — Design Proposal (Firmware Secure Boot State, Host Discovery)
 
-> **Status: Accepted; domain models and parser implemented (Parts 1–2).** This document is the authoritative design for the Secure Boot Adapter, the third Host Discovery adapter in BCS's Platform Layer, following the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md) (`Accepted`, implemented) and the [Storage Adapter](STORAGE_ADAPTER.md) (`Accepted`, models implemented). **Implemented:** `SecureBootState`/`SecureBootStatus` (`cli/src/bcs/platform/adapters/secureboot/models.py`), per [§ Domain Models](#domain-models); and the pure parser, `parse_secure_boot_status` (`cli/src/bcs/platform/adapters/secureboot/parser.py`), per [§ Parser Strategy](#parser-strategy). **Not yet implemented:** `adapter.py`, `errors.py`, `RuntimeContext` integration, and Host Discovery integration. See [§ ADR Recommendation](#adr-recommendation) for why this document concludes no new ADR is required.
+> **Status: Accepted; domain models, parser, and error hierarchy implemented (Parts 1–3).** This document is the authoritative design for the Secure Boot Adapter, the third Host Discovery adapter in BCS's Platform Layer, following the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md) (`Accepted`, implemented) and the [Storage Adapter](STORAGE_ADAPTER.md) (`Accepted`, models implemented). **Implemented:** `SecureBootState`/`SecureBootStatus` (`cli/src/bcs/platform/adapters/secureboot/models.py`), per [§ Domain Models](#domain-models); the pure parser, `parse_secure_boot_status` (`cli/src/bcs/platform/adapters/secureboot/parser.py`), per [§ Parser Strategy](#parser-strategy); and the error hierarchy (`cli/src/bcs/platform/adapters/secureboot/errors.py`), per [§ Error Hierarchy](#error-hierarchy). **Not yet implemented:** `adapter.py`, `RuntimeContext` integration, and Host Discovery integration. See [§ ADR Recommendation](#adr-recommendation) for why this document concludes no new ADR is required.
 
 ## Purpose
 
@@ -30,11 +30,11 @@ cli/src/bcs/platform/adapters/
     │                              # NOT named "mokutil": the package survives a
     │                              # future backend swap (direct efivarfs reads,
     │                              # libefivar, ...)
-    ├── __init__.py                  # [implemented] re-exports SecureBootState, SecureBootStatus;
-    │                              # will also re-export parse_secure_boot_status,
-    │                              # read_secure_boot_status, SecureBootError,
-    │                              # SecureBootUnavailableError, SecureBootParseError
-    │                              # once implemented
+    ├── __init__.py                  # [implemented] re-exports SecureBootState, SecureBootStatus,
+    │                              # SecureBootError, SecureBootUnavailableError,
+    │                              # SecureBootParseError; will also re-export
+    │                              # parse_secure_boot_status and
+    │                              # read_secure_boot_status once implemented
     ├── models.py                    # [implemented] SecureBootState (enum), SecureBootStatus
     │                              # (frozen, JSON-serializable) - see § Domain Models
     ├── parser.py                    # [implemented] parse_secure_boot_status(text: str) ->
@@ -44,7 +44,7 @@ cli/src/bcs/platform/adapters/
     │                              # SecureBootStatus - the only place this package
     │                              # calls CommandRunner.run(), and the only place
     │                              # that knows the current backend is mokutil
-    └── errors.py                    # SecureBootError(PlatformError) and its two subclasses
+    └── errors.py                    # [implemented] SecureBootError(PlatformError) and its two subclasses
 ```
 
 Directory named `secureboot` (one word, no separator) to match the domain category already reserved for it in the fixture corpus (`cli/tests/fixtures/secureboot/`, scaffolded during the Host Discovery fixtures-infrastructure work — see [§ Fixtures Strategy](#fixtures-strategy)) and the sibling category names `firmware`/`storage`/`filesystem`. Organized as a small subpackage, not a flat file, for the same reason [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md) point 7 organized `efi` that way: a schema, a pure parser, an I/O-performing adapter function, and adapter-specific exceptions are four distinct concerns even for a domain this small. The public import surface (`from bcs.platform.adapters.secureboot import read_secure_boot_status, SecureBootStatus`) is unaffected either way.
