@@ -7,21 +7,24 @@ second Host Discovery adapter, following the same architecture as
 ``docs/decisions/0010-efi-adapter-read-only-scope.md``).
 
 Implemented so far: the immutable domain models
-(:mod:`bcs.platform.adapters.storage.models`). Per the accepted
-design, this package will eventually also contain:
+(:mod:`bcs.platform.adapters.storage.models`), the domain-specific
+error hierarchy (:mod:`bcs.platform.adapters.storage.errors`), and the
+pure parser (:mod:`bcs.platform.adapters.storage.parser`). Per the
+accepted design, this package will eventually also contain:
 
-- ``parser.py`` - ``parse_storage_topology(lsblk_output: str,
-  blkid_output: str, findmnt_output: str) -> StorageConfiguration``, a
-  pure function.
 - ``adapter.py`` - ``read_storage_topology(runner: CommandRunner) ->
   StorageConfiguration``, the only place this package calls
   ``CommandRunner.run()``.
-- ``errors.py`` - ``StorageError`` and its subclasses.
 
-None of these exist yet. Nothing in this package executes a process or
-imports ``subprocess``/``CommandRunner`` at this stage.
+Nothing in this package executes a process or imports
+``subprocess``/``CommandRunner`` at this stage.
 """
 
+from bcs.platform.adapters.storage.errors import (
+    StorageError,
+    StorageParseError,
+    StorageUnavailableError,
+)
 from bcs.platform.adapters.storage.models import (
     BlockDevice,
     FilesystemInfo,
@@ -29,6 +32,7 @@ from bcs.platform.adapters.storage.models import (
     Partition,
     StorageConfiguration,
 )
+from bcs.platform.adapters.storage.parser import parse_storage_topology
 
 __all__ = [
     "BlockDevice",
@@ -36,4 +40,8 @@ __all__ = [
     "MountEntry",
     "Partition",
     "StorageConfiguration",
+    "StorageError",
+    "StorageParseError",
+    "StorageUnavailableError",
+    "parse_storage_topology",
 ]

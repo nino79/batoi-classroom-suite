@@ -1,6 +1,6 @@
 # Storage Adapter — Design Proposal (Block Storage, Partitions, Filesystems)
 
-> **Status: Accepted; models implemented.** This document is the authoritative design for the Storage Adapter, the second Host Discovery adapter in BCS's Platform Layer. It follows the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md). **Implemented:** `BlockDevice`/`Partition`/`FilesystemInfo`/`MountEntry`/`StorageConfiguration` (`cli/src/bcs/platform/adapters/storage/models.py`) — the immutable domain models only, per [§ Pydantic Models](#pydantic-models). **Not yet implemented:** `parser.py`, `adapter.py`, `errors.py` — each remains subject to the same review process before its own implementation begins.
+> **Status: Accepted; models, errors, and parser implemented.** This document is the authoritative design for the Storage Adapter, the second Host Discovery adapter in BCS's Platform Layer. It follows the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md). **Implemented:** `BlockDevice`/`Partition`/`FilesystemInfo`/`MountEntry`/`StorageConfiguration` (`cli/src/bcs/platform/adapters/storage/models.py`, per [§ Pydantic Models](#pydantic-models)); `StorageError`/`StorageUnavailableError`/`StorageParseError` (`cli/src/bcs/platform/adapters/storage/errors.py`, per [§ Error Hierarchy](#error-hierarchy)); `parse_storage_topology` (`cli/src/bcs/platform/adapters/storage/parser.py`, per [§ Parser Architecture](#parser-architecture)). **Not yet implemented:** `adapter.py` — remains subject to the same review process before its own implementation begins.
 
 ## Purpose
 
@@ -42,12 +42,14 @@ cli/src/bcs/platform/adapters/
     ├── models.py                  # [implemented] BlockDevice, Partition, FilesystemInfo,
     │                              # MountEntry, StorageConfiguration
     │                              # (frozen, JSON-serializable) - see § Pydantic Models
-    ├── parser.py                  # [not yet implemented] parse_storage_topology(text: str) ->
-    │                              # StorageConfiguration (pure function, no subprocess,
-    │                              # no CommandRunner)
+    ├── parser.py                  # [implemented] parse_storage_topology(lsblk_output: str,
+    │                              # blkid_output: str, findmnt_output: str) -> StorageConfiguration
+    │                              # (pure function, no subprocess, no CommandRunner, no
+    │                              # PlatformError hierarchy - raises plain ValueError, mirroring
+    │                              # the EFI parser exactly - see § Parser Architecture)
     ├── adapter.py                 # [not yet implemented] read_storage_topology(runner: CommandRunner) ->
     │                              # StorageConfiguration (only calls runner.run())
-    └── errors.py                  # [not yet implemented] StorageError(PlatformError),
+    └── errors.py                  # [implemented] StorageError(PlatformError),
                                     # StorageUnavailableError, StorageParseError
 ```
 
@@ -129,7 +131,7 @@ StorageConfiguration
 
 ## Parser Architecture
 
-The parser (`parser.py`) is a **pure function** with no knowledge of subprocess, CommandRunner, or where its input came from:
+**Implemented** (`cli/src/bcs/platform/adapters/storage/parser.py`; see `cli/tests/test_platform_adapters_storage_parser.py` for the corresponding test coverage). The parser (`parser.py`) is a **pure function** with no knowledge of subprocess, CommandRunner, or where its input came from:
 
 ```python
 def parse_storage_topology(
@@ -158,7 +160,7 @@ The parser accepts three separate text inputs (one per tool) rather than a singl
 
 ### Error Handling in Parser
 
-The parser raises `StorageParseError` (from `errors.py`) on malformed JSON or unexpected structure. It does not catch tool-level errors — those are the adapter's responsibility (tool not found, non-zero exit code, timeout).
+**Amended during implementation, to match the EFI parser's own precedent exactly** (`bcs.platform.adapters.efi.parser`, per [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md)): the parser raises plain `ValueError` on malformed JSON, a missing top-level array, or an entry missing a field the parser cannot proceed without — naming the tool and the specific problem — and lets `pydantic.ValidationError` propagate for model-level invariants (duplicate device paths, duplicate partition numbers). It does **not** import or raise `StorageParseError` — that would pull the Platform Layer's `PlatformError` hierarchy into a module whose independence from execution/error-translation concerns is a load-bearing property, the same reasoning that keeps `bcs.platform.adapters.efi.parser` free of `FirmwareBootParseError`. Translating a caught `ValueError` into `StorageParseError` is `adapter.py`'s job, once it exists — see `bcs.platform.adapters.efi.adapter` for the exact pattern this adapter is expected to follow. The parser does not catch tool-level errors either way — those remain the adapter's responsibility (tool not found, non-zero exit code, timeout).
 
 ## Adapter Responsibilities
 
@@ -234,16 +236,17 @@ The Storage Adapter's models are **Platform Layer** models (in `bcs.platform.ada
 
 `BlockDevice`/`Partition`/`FilesystemInfo`/`MountEntry`/`StorageConfiguration` are covered directly, no fixtures or mocking needed — construction and defaults, both alias spellings (`populate_by_name`), every validator (`size_bytes`/`number` bounds, the two duplicate-identifier checks), immutability, equality, hashability, and JSON round-tripping (including nested models) for each model. See `cli/tests/test_platform_adapters_storage_models.py`; `models.py` is at 100% statement and branch coverage.
 
-### Unit Tests (parser)
+### Unit Tests (parser) — implemented
 
-The parser is tested with fixture files containing real `lsblk -J -b`, `blkid -p -o json`, and `findmnt -J` output from representative hardware:
+`parse_storage_topology` is covered by `cli/tests/test_platform_adapters_storage_parser.py`: every well-formed scenario named below, each malformed-input case per tool (invalid JSON, a missing top-level array, an entry missing a required field), the two model-level `ValidationError` cases (duplicate device paths, duplicate partition numbers), and — via AST inspection, not a substring search — that the module imports nothing beyond `json`/`typing`/its own models. The real corpus (`cli/tests/fixtures/storage/`) holds only zero-byte placeholders for the three representative scenarios below (see that directory's README), so these tests build a *temporary*, `tmp_path`-rooted corpus mirroring the real one's layout and load every scenario through `fixture_utils.load_fixture`/`fixture_path` — never an inline string passed straight to the parser — exactly the approach `cli/tests/test_platform_adapters_efi_parser.py` used before real `efibootmgr` captures existed. Once real captures replace the placeholders, this test module is expected to switch to loading them directly.
+
+Representative hardware scenarios (the three with real-corpus placeholders reserved):
 
 - **Typical NVMe laptop**: single NVMe disk, GPT+ESP, one Linux partition
 - **Classroom machine**: NVMe disk, multiple partitions (ESP, root, home, swap)
 - **USB recovery drive**: removable USB disk, single partition, vfat
-- **Malformed output**: truncated JSON, missing fields, unexpected structure
 
-Each fixture is a triple of outputs that correspond to the same system state, so cross-referencing tests can verify correct merging.
+Each is a triple of outputs (one per tool) corresponding to the same system state, so cross-referencing tests can verify correct merging. **Malformed output** (truncated JSON, missing fields, unexpected structure) is deliberately tested only via the synthetic corpus, not as real-corpus placeholders — malformed output is not something a healthy real system produces to capture, mirroring how the EFI Adapter's own malformed-line scenarios were never added to `cli/tests/fixtures/firmware/`'s inventory either.
 
 ### Integration Tests (adapter)
 

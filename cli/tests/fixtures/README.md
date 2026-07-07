@@ -10,7 +10,7 @@ tool, per the project's domain-driven naming rule
 | Directory | Domain | Consuming adapter |
 |---|---|---|
 | [`firmware/`](firmware/README.md) | UEFI firmware boot configuration | `bcs.platform.adapters.efi` ([docs/EFI_ADAPTER.md](../../../docs/EFI_ADAPTER.md)) — models implemented; parser/adapter pending |
-| [`storage/`](storage/README.md) | Block devices / partitions | reserved — no adapter designed yet |
+| [`storage/`](storage/README.md) | Block devices / partitions | `bcs.platform.adapters.storage` ([docs/STORAGE_ADAPTER.md](../../../docs/STORAGE_ADAPTER.md)) — models, errors, and parser implemented; `adapter.py` pending |
 | [`secureboot/`](secureboot/README.md) | Secure Boot state | reserved — no adapter designed yet |
 | [`filesystem/`](filesystem/README.md) | Filesystems / mounts | reserved — no adapter designed yet |
 
