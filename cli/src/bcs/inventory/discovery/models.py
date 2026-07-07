@@ -17,7 +17,7 @@ orchestrator (not yet implemented - see that document's own
   aggregate the orchestrator will produce - its only output type,
   deliberately distinct from ``HostInventory`` itself (which has
   fields, ``identity``/``tooling``, that are not Discovery domains -
-  see ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#relationship-to-host-inventory``).
+  see ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#relationship-to-host-inventory---implemented``).
 
 Neither type executes a process, imports ``subprocess``, or imports
 ``bcs.platform.execution.CommandRunner`` - see
