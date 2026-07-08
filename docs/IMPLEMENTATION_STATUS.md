@@ -8,10 +8,10 @@ This document does not replace any of those — see [§ 10. Reading Guide](#10-r
 
 - **Current development phase:** [Phase 0 — Foundation](../ROADMAP.md#phase-0--foundation-architecture--governance) (architecture, specification, and core infrastructure). Phases 1–5 and v1.0 GA are all still `⏳ Planned`/`💤 Not started` — see [§ 6. Phase Progress](#6-phase-progress).
 - **Implemented subsystems:** the `bcs` CLI framework (`version`/`doctor`/`validate`/`inventory` commands), the unified `ClassroomConfig` loader/validator, the Host Inventory subsystem, the Platform Layer core (`CommandRunner`/`CommandResult`/`PlatformError`), and three Host Discovery adapters (EFI, Storage, Secure Boot) fully wired into the Host Discovery Orchestrator's composition root.
-- **Partially implemented subsystems:** the `bcs` CLI command tree (`build`/`install`/`deploy`/`backup`/`restore`/`update`/`config` are registered stubs, per [`cli/src/bcs/commands/stubs.py`](../cli/src/bcs/commands/stubs.py)); the Host Discovery Orchestrator (implemented end to end as a component, but only 3 of its 8 named domain slots have a bound adapter, and no CLI command consumes it yet — see [§ 5. Host Discovery Status](#5-host-discovery-status)).
-- **Documentation-only components:** Boot Manager, Builder, and Deploy (Phases 1–3 — each directory contains only a placeholder `README.md`, no code) and the Filesystem Adapter (`docs/FILESYSTEM_ADAPTER.md`, status `Proposed`, not yet accepted).
-- **Current test count:** 777 passing tests in `cli/` (`pytest`, zero failures).
-- **Quality gates status:** `mypy` (strict, canonical `mypy` command) — clean, 52 source files. `pytest` — 777 passed. `ruff check`/`ruff format --check` — clean across `cli/src/` and all but one test file; see [§ 7. Test Status](#7-test-status) for the one known exception.
+- **Partially implemented subsystems:** the `bcs` CLI command tree (`build`/`install`/`deploy`/`backup`/`restore`/`update`/`config` are registered stubs, per [`cli/src/bcs/commands/stubs.py`](../cli/src/bcs/commands/stubs.py)); the Host Discovery Orchestrator (implemented end to end as a component, but only 3 of its 8 named domain slots have a bound adapter, and no CLI command consumes it yet — see [§ 5. Host Discovery Status](#5-host-discovery-status)); the Filesystem Adapter (`docs/FILESYSTEM_ADAPTER.md`, `Accepted`; domain models implemented — Part 1 — per [PATTERNS.md](PATTERNS.md); parser, errors, adapter, and Host Discovery wiring not yet implemented).
+- **Documentation-only components:** Boot Manager, Builder, and Deploy (Phases 1–3 — each directory contains only a placeholder `README.md`, no code).
+- **Current test count:** 819 passing tests in `cli/` (`pytest`, zero failures).
+- **Quality gates status:** `mypy` (strict, canonical `mypy` command) — clean, 54 source files. `pytest` — 819 passed. `ruff check`/`ruff format --check` — clean across `cli/src/` and all but one test file; see [§ 7. Test Status](#7-test-status) for the one known exception.
 - **Overall implementation progress:** Phase 0's documentation set is substantially in place; within it, the `cli/` framework and its Platform Layer/Host Discovery subsystem are the only components with real, tested code. Boot Manager, Builder, and Deploy (Phases 1–3) have not started.
 
 ## 2. Architecture Components
@@ -26,7 +26,7 @@ This document does not replace any of those — see [§ 10. Reading Guide](#10-r
 | Storage Adapter | Read-only block/partition/filesystem topology wrapper | ✅ Fully implemented | [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md) (Accepted) | `cli/src/bcs/platform/adapters/storage/` — same four-file shape | `cli/tests/test_platform_adapters_storage_*.py` | Wired into the Host Discovery composition root (`storage` slot). |
 | Secure Boot Adapter | Read-only firmware Secure Boot state wrapper | ✅ Fully implemented | [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md) (Accepted) | `cli/src/bcs/platform/adapters/secureboot/` — same four-file shape | `cli/tests/test_platform_adapters_secureboot_*.py` | Wired into the Host Discovery composition root (`secure_boot` slot). Not yet folded into `HostInventory`'s own schema. |
 | Host Discovery Orchestrator | Coordinates every Host Discovery adapter into one snapshot | ✅ Implemented end to end | [docs/HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md) ([ADR-0011](decisions/0011-host-discovery-orchestrator.md), Accepted) | `cli/src/bcs/inventory/discovery/` — data models, coordination logic, `RuntimeContext.host_discovery_orchestrator` composition-root wiring | `cli/tests/test_inventory_discovery_*.py`, `test_host_discovery_*.py` | No `bcs` command passes `runtime.host_discovery_orchestrator` into `collect_host_inventory()` yet. |
-| Filesystem Adapter | Read-only filesystem usage/capacity wrapper | 💤 Documentation only | [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) (`Proposed`, pending approval) | None | None | Fourth Host Discovery adapter design; the `filesystem` slot exists in `HostDiscoveryAdapters` as a reserved, generically-typed (`object`) placeholder. |
+| Filesystem Adapter | Read-only filesystem usage/capacity wrapper | 🚧 Partially implemented | [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) (`Accepted`) | `cli/src/bcs/platform/adapters/filesystem/` — `models.py` implemented (Part 1); `parser.py`/`errors.py`/`adapter.py` not yet | `cli/tests/test_platform_adapters_filesystem_models.py` | Fourth Host Discovery adapter; the `filesystem` slot in `HostDiscoveryAdapters` remains a reserved, generically-typed (`object`) placeholder until `adapter.py` exists. |
 | Network Adapter | Network interface enumeration | 💤 No dedicated adapter | — | `bcs.inventory.collectors.collect_network()` (existing `sysfs`-based collector), reused directly as the `network` Host Discovery slot | `cli/tests/test_inventory_collectors.py` | No tool-based Platform Layer adapter has been designed for this domain; `NetworkInterface.ip_addresses` is a documented, permanent placeholder gap in the current collector. |
 | CPU Adapter | CPU facts | 💤 No dedicated adapter | — | `bcs.inventory.collectors.collect_cpu()`, reused directly as the `cpu` Host Discovery slot | `cli/tests/test_inventory_collectors.py` | Same pattern as Network — no dedicated tool-based adapter designed. |
 | Memory Adapter | Memory facts | 💤 No dedicated adapter | — | `bcs.inventory.collectors.collect_memory()`, reused directly as the `memory` Host Discovery slot | `cli/tests/test_inventory_collectors.py` | Same pattern as Network — no dedicated tool-based adapter designed. |
@@ -62,7 +62,7 @@ This table mirrors the authoritative index at [docs/decisions/README.md § Index
 | EFI | ✅ | ✅ | ✅ | ✅ | ✅ (`efi` slot) | ✅ Wired | ✅ | [EFI_ADAPTER.md](EFI_ADAPTER.md) — Accepted |
 | Storage | ✅ | ✅ | ✅ | ✅ | ✅ (`storage` slot) | ✅ Wired | ✅ | [STORAGE_ADAPTER.md](STORAGE_ADAPTER.md) — Accepted |
 | Secure Boot | ✅ | ✅ | ✅ | ✅ | ✅ (`secure_boot` slot) | ✅ Wired | ✅ | [SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md) — Accepted |
-| Filesystem | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ (`filesystem` slot reserved, generic `object`-typed) | ❌ | [FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) — `Proposed`, pending approval |
+| Filesystem | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ (`filesystem` slot reserved, generic `object`-typed) | ✅ (models only) | [FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) — `Accepted`; Part 1 (models) implemented |
 
 "Composition Root" means bound in `bcs.app.main()`'s `HostDiscoveryAdapters` construction (`cli/src/bcs/app.py`), sharing the single `SubprocessCommandRunner` instance. "Host Discovery" means `HostDiscoveryOrchestrator.discover()` actually invokes that slot when called. Neither implies the result reaches `HostInventory`'s own schema or any `bcs` command's output — see [§ 5](#5-host-discovery-status).
 
@@ -70,7 +70,7 @@ This table mirrors the authoritative index at [docs/decisions/README.md § Index
 
 **Implemented adapters** (wired at the composition root, invoked by `HostDiscoveryOrchestrator.discover()`): `efi`, `storage`, `secure_boot` — see [§ 4](#4-platform-adapter-matrix). `network`, `cpu`, `memory` are also wired, but to the pre-existing `sysfs`-based `bcs.inventory.collectors` functions directly, not to a tool-based Platform Layer adapter.
 
-**Pending adapters:** `filesystem` (design `Proposed`, not accepted — [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md)) and `tpm` (not designed at all, no motivating requirement).
+**Pending adapters:** `filesystem` (design `Accepted` — [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md); domain models implemented, `parser.py`/`errors.py`/`adapter.py` not yet, so nothing to wire in) and `tpm` (not designed at all, no motivating requirement).
 
 **Current pipeline:** `bcs.app.main()` (the composition root) constructs one `SubprocessCommandRunner`, binds it into `HostDiscoveryAdapters` (`efi`/`storage`/`secure_boot` via `functools.partial`; `network`/`cpu`/`memory` directly), constructs one `HostDiscoveryOrchestrator` from that bundle, and stores it on `RuntimeContext.host_discovery_orchestrator` — built exactly once per `bcs` invocation. Calling `.discover()` on it invokes every wired slot in the fixed order `efi`, `storage`, `secure_boot`, `filesystem`, `network`, `cpu`, `memory`, `tpm`, isolates any `PlatformError` into a `caveats` entry (`"{domain}: {ExceptionType}: {message}"`, per [ADR-0011 § Error Propagation](HOST_DISCOVERY_ORCHESTRATOR.md#error-propagation)) without stopping the remaining slots, and returns one immutable `HostDiscoverySnapshot`. This whole path is exercised end to end by `cli/tests/test_host_discovery_pipeline.py`.
 
@@ -103,10 +103,10 @@ Full detail lives in [ROADMAP.md](../ROADMAP.md); this is a status count only, n
 
 ## 7. Test Status
 
-- **pytest:** 777 passed, 0 failed (`cli/`, run via the project's own `pytest` configuration in `cli/pyproject.toml`).
-- **Coverage:** 96% statement coverage overall (2,121 statements, 67 missed; 410 branches, 36 partial), measured by the same `pytest --cov` configuration CI uses. Every module under `bcs.platform` and `bcs.inventory.discovery` (the Platform Layer core and all three implemented adapters, plus the Host Discovery Orchestrator) is at 100% statement and branch coverage.
+- **pytest:** 819 passed, 0 failed (`cli/`, run via the project's own `pytest` configuration in `cli/pyproject.toml`).
+- **Coverage:** 96% statement coverage overall (2,143 statements, 67 missed; 410 branches, 36 partial), measured by the same `pytest --cov` configuration CI uses. Every module under `bcs.platform` and `bcs.inventory.discovery` (the Platform Layer core, all three fully-implemented adapters, the Filesystem Adapter's own `models.py`, and the Host Discovery Orchestrator) is at 100% statement and branch coverage.
 - **Ruff:** `ruff check .`/`ruff format --check .` are clean across `cli/src/` and all test files except one: `cli/tests/test_platform_adapters_efi_adapter.py` has 4 pre-existing findings (an unsorted import block, one `PLR0913`, one `UP017`, one missing trailing newline) that predate the work reflected in this document and have not been fixed, since they are unrelated to any task that touched this repository so far.
-- **mypy:** the canonical `mypy` command (strict mode, `packages = ["bcs"]` per `cli/pyproject.toml`) passes cleanly across all 52 source files under `cli/src/bcs/`. Test files are covered by a relaxed `disallow_untyped_defs = false` override and are not part of the strict gate — matching `.github/workflows/ci.yml`'s own `mypy` job exactly.
+- **mypy:** the canonical `mypy` command (strict mode, `packages = ["bcs"]` per `cli/pyproject.toml`) passes cleanly across all 54 source files under `cli/src/bcs/`. Test files are covered by a relaxed `disallow_untyped_defs = false` override and are not part of the strict gate — matching `.github/workflows/ci.yml`'s own `mypy` job exactly.
 - **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — four jobs (`lint`, `typecheck`, `test` on a Python 3.12/3.13 matrix, `cli-smoke-test`), gated behind an `all-green` job. Scoped via path filters to `cli/**`, `config/**`, and the workflow file itself — it does not run on documentation-only changes elsewhere in the repository, including this one.
 
 ## 8. Outstanding Work
@@ -120,7 +120,7 @@ Each item links to the design document or ADR that already records it in full �
 
 **Medium**
 
-- Filesystem Adapter design ([docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md)) is `Proposed`, not yet accepted or implemented.
+- Filesystem Adapter ([docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md), `Accepted`) has only its domain models implemented (Part 1); `parser.py`, `errors.py`, `adapter.py`, composition-root wiring, and Host Discovery integration remain — see [docs/PATTERNS.md](PATTERNS.md) for the process.
 - Folding Discovery-domain facts into `HostInventory`'s own schema is a separate, not-yet-proposed ADR-0008 amendment — see [ADR-0011 Decision point 6](decisions/0011-host-discovery-orchestrator.md) and [docs/HOST_DISCOVERY_ORCHESTRATOR.md § Relationship to Host Inventory](HOST_DISCOVERY_ORCHESTRATOR.md#relationship-to-host-inventory---implemented).
 - `cli/pyproject.toml`'s Bandit `S603`/`S607` scoping is not yet narrowed from repository-wide to `bcs.plugins`/`bcs.platform.execution` — see [docs/PLATFORM_LAYER.md § Approved Design Decisions](PLATFORM_LAYER.md#approved-design-decisions), item 3.
 - A shared `FakeCommandRunner` test double under `cli/tests/` has not been added — see [docs/PLATFORM_LAYER.md § Approved Design Decisions](PLATFORM_LAYER.md#approved-design-decisions), item 4.
@@ -129,7 +129,7 @@ Each item links to the design document or ADR that already records it in full �
 **Low**
 
 - `FrozenModel`/`FrozenExtensibleModel` relocation to `bcs.model_utils` — see [docs/PLATFORM_LAYER.md § Approved Design Decisions](PLATFORM_LAYER.md#approved-design-decisions), item 5.
-- Network/CPU/Memory/TPM tool-based adapters are not designed and not currently motivated by any `SPECIFICATION.md` requirement — see [docs/HOST_DISCOVERY_ORCHESTRATOR.md § Future Extensibility](HOST_DISCOVERY_ORCHESTRATOR.md#future-extensibility).
+- Network/CPU/Memory/TPM tool-based adapters are not designed and not currently motivated by any `SPECIFICATION.md` requirement — see [docs/HOST_DISCOVERY_ORCHESTRATOR.md § Future Extensibility](HOST_DISCOVERY_ORCHESTRATOR.md#future-extensibility). If one is ever proposed, it should follow the process in [PATTERNS.md](PATTERNS.md), the methodology extracted from the EFI/Storage/Secure Boot adapters.
 
 ## 9. Current Architecture Snapshot
 
@@ -204,3 +204,4 @@ flowchart TB
 - **If you want historical changes** → [CHANGELOG.md](../CHANGELOG.md)
 - **If you want design details** → the individual design documents ([HOST_INVENTORY.md](HOST_INVENTORY.md), [PLATFORM_LAYER.md](PLATFORM_LAYER.md), [EFI_ADAPTER.md](EFI_ADAPTER.md), [STORAGE_ADAPTER.md](STORAGE_ADAPTER.md), [SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md), [FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md), [HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md), [CLI.md](CLI.md), [CONFIGURATION.md](CONFIGURATION.md))
 - **If you want architectural decisions** → [docs/decisions/](decisions/) (the ADRs)
+- **If you want to build the next Platform Layer adapter** → [PATTERNS.md](PATTERNS.md) — the repeatable lifecycle, Definition of Done, testing strategy, and checklist every adapter in [§ 4. Platform Adapter Matrix](#4-platform-adapter-matrix) already followed

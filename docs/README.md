@@ -7,6 +7,7 @@ This directory contains the detailed documentation for Batoi Classroom Suite (BC
 | Section | Purpose |
 |---|---|
 | [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Single-page dashboard answering "what is implemented today," generated from repository state — not a substitute for [ROADMAP.md](../ROADMAP.md) or [CHANGELOG.md](../CHANGELOG.md). |
+| [PATTERNS.md](PATTERNS.md) | The canonical, repeatable implementation methodology for Platform Layer adapters — lifecycle, Definition of Done, testing strategy, architecture rules, and a mechanical checklist for building the next one (Filesystem, Network, CPU, Memory, TPM, or any future adapter). |
 | [architecture/](architecture/) | Per-component architecture deep-dives: responsibilities, internal design, interfaces, Mermaid diagrams. |
 | [specifications/](specifications/) | Per-component functional requirements, expanding [SPECIFICATION.md](../SPECIFICATION.md). |
 | [decisions/](decisions/) | Architecture Decision Records (ADRs) — the durable "why" behind hard-to-reverse choices. |

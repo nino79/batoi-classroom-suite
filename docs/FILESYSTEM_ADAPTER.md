@@ -1,6 +1,6 @@
 # Filesystem Adapter — Design Proposal (Filesystem Usage and Capacity, Host Discovery)
 
-> **Status: Proposed, pending approval.** This document is the authoritative design for the Filesystem Adapter, the fourth Host Discovery adapter in BCS's Platform Layer, following the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md) (`Accepted`, implemented), the [Storage Adapter](STORAGE_ADAPTER.md) (`Accepted`, implemented), and the [Secure Boot Adapter](SECURE_BOOT_ADAPTER.md) (`Accepted`, domain models/parser/error hierarchy implemented, adapter execution layer not yet). Nothing described here is implemented. See [§ ADR Recommendation](#adr-recommendation) for why this document concludes no new ADR is required.
+> **Status: Accepted; domain models implemented (Part 1).** This document is the authoritative design for the Filesystem Adapter, the fourth Host Discovery adapter in BCS's Platform Layer, following the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md) (`Accepted`, implemented), the [Storage Adapter](STORAGE_ADAPTER.md) (`Accepted`, implemented), and the [Secure Boot Adapter](SECURE_BOOT_ADAPTER.md) (`Accepted`, fully implemented). **Implemented:** `FilesystemUsage`/`FilesystemUsageReport` (`cli/src/bcs/platform/adapters/filesystem/models.py`), per [§ Domain Models](#domain-models). **Not yet implemented:** `parser.py`, `errors.py`, `adapter.py`, composition-root wiring, and Host Discovery integration. See [§ ADR Recommendation](#adr-recommendation) for why this document concludes no new ADR is required.
 
 ## Purpose
 
@@ -43,11 +43,12 @@ cli/src/bcs/platform/adapters/
 └── filesystem/                    # the filesystem-usage domain - see naming note below.
     │                              # NOT named "df": the package survives a future
     │                              # backend swap (statvfs-per-mount, a different tool, ...)
-    ├── __init__.py                  # re-exports FilesystemUsage, FilesystemUsageReport,
+    ├── __init__.py                  # [implemented] re-exports FilesystemUsage,
+    │                              # FilesystemUsageReport; will also re-export
     │                              # parse_filesystem_usage, read_filesystem_usage,
     │                              # FilesystemError, FilesystemUnavailableError,
-    │                              # FilesystemParseError
-    ├── models.py                    # FilesystemUsage, FilesystemUsageReport
+    │                              # FilesystemParseError once implemented
+    ├── models.py                    # [implemented] FilesystemUsage, FilesystemUsageReport
     │                              # (frozen, JSON-serializable) - see § Domain Models
     ├── parser.py                    # parse_filesystem_usage(text: str) ->
     │                              # FilesystemUsageReport - a pure function; see
@@ -65,7 +66,7 @@ Directory named `filesystem` (one word) to match the domain category already res
 
 ## Domain Models
 
-Both live in `models.py`. Like the [Secure Boot Adapter](SECURE_BOOT_ADAPTER.md#domain-models), this domain has a natural sub-entity (one record per mounted filesystem) but no deeper hierarchy — unlike the Storage Adapter's four-level device/partition/filesystem/mount structure, there is exactly **one** collection type here, not a nested tree, because `df` itself reports a flat list with no parent/child relationship between entries.
+**Implemented** (`cli/src/bcs/platform/adapters/filesystem/models.py`; see `cli/tests/test_platform_adapters_filesystem_models.py` for the corresponding test coverage). Both live in `models.py`. Like the [Secure Boot Adapter](SECURE_BOOT_ADAPTER.md#domain-models), this domain has a natural sub-entity (one record per mounted filesystem) but no deeper hierarchy — unlike the Storage Adapter's four-level device/partition/filesystem/mount structure, there is exactly **one** collection type here, not a nested tree, because `df` itself reports a flat list with no parent/child relationship between entries.
 
 ```mermaid
 classDiagram
@@ -236,7 +237,7 @@ Command metadata (which tool was called, exit code, duration) does **not** belon
 
 | Layer | What it verifies | How |
 |---|---|---|
-| `models.FilesystemUsage`/`FilesystemUsageReport` | Construction, defaults, both alias spellings (`populate_by_name`), the `ge=0` bound validators, immutability, equality, hashability, JSON round-tripping (including nested models, `None` inode fields, and a non-empty `raw_stderr`), and — explicitly, since this document's earlier draft got it wrong — that constructing a `FilesystemUsageReport` with two `FilesystemUsage` entries sharing the same `target` succeeds rather than raising. | Direct unit tests, no fixtures or mocking needed — mirroring `test_platform_adapters_secureboot_models.py`. |
+| `models.FilesystemUsage`/`FilesystemUsageReport` **(implemented)** | Construction, defaults, both alias spellings (`populate_by_name`), the `ge=0` bound validators, immutability, equality, hashability, JSON round-tripping (including nested models, `None` inode fields, and a non-empty `raw_stderr`), and — explicitly, since this document's earlier draft got it wrong — that constructing a `FilesystemUsageReport` with two `FilesystemUsage` entries sharing the same `target` succeeds rather than raising. | Direct unit tests, no fixtures or mocking needed — mirroring `test_platform_adapters_secureboot_models.py`. See `cli/tests/test_platform_adapters_filesystem_models.py`; `filesystem/models.py` is at 100% statement and branch coverage. |
 | `parser.parse_filesystem_usage` | Every case in [§ Parser Architecture § Row classification](#parser-architecture): a blank line; the header line (using GNU `df`'s real multi-word `"Mounted on"` label, to prove the split strategy doesn't need it hard-coded); a `target` containing internal whitespace; `-` inode fields parsing as `None`, individually and all three at once; a non-blank line with fewer than 9 fields raising `ValueError`; a 9-field line with some-but-not-all numeric fields parsing raising `ValueError`; two valid rows sharing the same `target` both surviving into the result; text with zero data lines returning an empty (not erroring) report; that `raw_stderr` is always `""` on every value this function returns; and — via AST inspection, not a substring search — that the module imports nothing beyond stdlib text handling and its own models. | Direct unit tests, using fixtures loaded via `fixture_utils.py`. Given the real corpus is capture-only and starts empty (see [§ Fixtures Strategy](#fixtures-strategy)), tests build a `tmp_path`-rooted synthetic corpus mirroring the real one's layout, exactly as every sibling parser's own test module did before real captures existed. |
 | `adapter.read_filesystem_usage` | Correct command (including `-a`) and argument order, correct locale-forced `env`, correct explicit `timeout_seconds`, `check=False`, correct hand-off to the parser, that a non-zero exit with at least one successfully-parsed entry is returned as a normal result carrying the real `stderr` in `raw_stderr` (not raised as an error, and not silently dropping `stderr`), that a *zero*-exit, fully-clean result carries `raw_stderr=""`, and that a non-zero exit with zero parsed entries *is* mapped to an error per [§ Error Mapping](#error-mapping). | `FakeCommandRunner` programmed to return a `CommandResult` wrapping fixture text as `stdout`, including cases with a non-zero `exit_code` alongside non-empty `stdout` and non-empty `stderr`. |
 | Error mapping | Each condition in [§ Error Mapping](#error-mapping) maps to the right exception. | `FakeCommandRunner` programmed to return/raise the corresponding failure shape. |

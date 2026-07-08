@@ -79,6 +79,7 @@ Track progress in [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md). For
 | [SPECIFICATION.md](SPECIFICATION.md) | Functional and non-functional requirements |
 | [ROADMAP.md](ROADMAP.md) | Phased delivery plan and current milestone |
 | [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) | Single-page dashboard: what is implemented today, generated from repository state |
+| [docs/PATTERNS.md](docs/PATTERNS.md) | The repeatable implementation methodology for Platform Layer adapters: lifecycle, Definition of Done, testing strategy, architecture rules, and a checklist for the next adapter |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose changes, ADRs, and contribution workflow |
 | [SECURITY.md](SECURITY.md) | Supported versions and vulnerability reporting |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
