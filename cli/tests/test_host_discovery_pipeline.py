@@ -37,6 +37,7 @@ from bcs.inventory.discovery.models import HostDiscoveryAdapters, HostDiscoveryS
 from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
 from bcs.platform.adapters.efi.adapter import read_firmware_boot_configuration
 from bcs.platform.adapters.efi.models import FirmwareBootConfiguration
+from bcs.platform.adapters.filesystem.adapter import read_filesystem_usage
 from bcs.platform.adapters.secureboot.adapter import read_secure_boot_status
 from bcs.platform.adapters.secureboot.models import SecureBootState, SecureBootStatus
 from bcs.platform.adapters.storage.adapter import read_storage_topology
@@ -148,6 +149,10 @@ _VALID_FINDMNT = (
     '"fstype": "vfat", "options": "rw,relatime"}]}'
 )
 _VALID_MOKUTIL = "SecureBoot enabled\nSetupMode disabled\n"
+_VALID_DF = (
+    "Filesystem Type 1K-blocks Used Available Size Used% Mounted on\n"
+    "/dev/nvme0n1p1 vfat 524288 112 524176 524288 1% /boot/efi\n"
+)
 
 
 def _make_result(*, stdout: str = "", stderr: str = "", exit_code: int = 0) -> FakeCommandResult:
@@ -171,6 +176,7 @@ def _fully_successful_runner() -> FakeCommandRunner:
             "blkid": _make_result(stdout=_VALID_BLKID),
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
             "mokutil": _make_result(stdout=_VALID_MOKUTIL),
+            "df": _make_result(stdout=_VALID_DF),
         }
     )
 
@@ -185,6 +191,7 @@ def _build_adapters(runner: FakeCommandRunner) -> HostDiscoveryAdapters:
         efi=functools.partial(read_firmware_boot_configuration, runner=runner),
         storage=functools.partial(read_storage_topology, runner=runner),
         secure_boot=functools.partial(read_secure_boot_status, runner=runner),
+        filesystem=functools.partial(read_filesystem_usage, runner=runner),
         network=collectors.collect_network,
         cpu=collectors.collect_cpu,
         memory=collectors.collect_memory,
@@ -214,16 +221,15 @@ def test_full_pipeline_success_populates_every_wired_domain_exactly_once() -> No
     assert snapshot.cpu is not None
     assert snapshot.memory is not None
     assert isinstance(snapshot.network, tuple)
-    # filesystem/tpm: genuinely unset slots, not a failure.
-    assert snapshot.filesystem is None
+    # tpm: genuinely unset slot, not a failure.
     assert snapshot.tpm is None
     assert snapshot.caveats == ()
 
     # Every tool-based adapter invoked exactly once - one CommandRunner.run()
     # call per tool, no retries, no duplicate invocation.
     tools_called = [call["command"][0] for call in runner.calls]
-    assert sorted(tools_called) == ["blkid", "efibootmgr", "findmnt", "lsblk", "mokutil"]
-    assert len(tools_called) == len(set(tools_called)) == 5
+    assert sorted(tools_called) == ["blkid", "df", "efibootmgr", "findmnt", "lsblk", "mokutil"]
+    assert len(tools_called) == len(set(tools_called)) == 6
 
 
 def test_full_pipeline_calls_share_the_locale_forced_environment() -> None:
@@ -234,7 +240,7 @@ def test_full_pipeline_calls_share_the_locale_forced_environment() -> None:
     runner = _fully_successful_runner()
     HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
 
-    assert len(runner.calls) == 5
+    assert len(runner.calls) == 6
     for call in runner.calls:
         assert call["env"]["LANG"] == "C"
         assert call["env"]["LC_ALL"] == "C"
@@ -364,11 +370,12 @@ def test_pipeline_built_by_the_real_composition_root_works_end_to_end(
     assert snapshot.storage_topology is not None
     assert isinstance(snapshot.secure_boot, SecureBootStatus)
     assert snapshot.secure_boot.state == SecureBootState.ENABLED
+    assert snapshot.filesystem is not None
     assert snapshot.caveats == ()
 
     tools_called = [call["command"][0] for call in fake_command_runner.calls]
-    assert sorted(tools_called) == ["blkid", "efibootmgr", "findmnt", "lsblk", "mokutil"]
-    assert len(tools_called) == len(set(tools_called)) == 5
+    assert sorted(tools_called) == ["blkid", "df", "efibootmgr", "findmnt", "lsblk", "mokutil"]
+    assert len(tools_called) == len(set(tools_called)) == 6
 
 
 def test_discover_called_twice_re_invokes_every_real_adapter_a_second_time() -> None:
@@ -383,6 +390,7 @@ def test_discover_called_twice_re_invokes_every_real_adapter_a_second_time() -> 
     orchestrator.discover()
 
     tools_called = [call["command"][0] for call in runner.calls]
-    assert len(tools_called) == 10
+    assert len(tools_called) == 12
     assert tools_called.count("mokutil") == 2
     assert tools_called.count("efibootmgr") == 2
+    assert tools_called.count("df") == 2

@@ -37,6 +37,7 @@ from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
 from bcs.logging_setup import LogFormat, LogLevelOption, configure_logging, resolve_log_level
 from bcs.output import OutputFormat
 from bcs.platform.adapters.efi.adapter import read_firmware_boot_configuration
+from bcs.platform.adapters.filesystem.adapter import read_filesystem_usage
 from bcs.platform.adapters.secureboot.adapter import read_secure_boot_status
 from bcs.platform.adapters.storage.adapter import read_storage_topology
 from bcs.platform.execution import SubprocessCommandRunner
@@ -208,11 +209,12 @@ def main(  # noqa: PLR0913 - global options are inherently numerous; see docs/CL
 
     # Host Discovery adapters, bound once to the shared command_runner above
     # - see docs/HOST_DISCOVERY_ORCHESTRATOR.md#dependency-injection-strategy---implemented.
-    # filesystem/tpm stay unset: no adapter.py exists yet for either domain.
+    # tpm stays unset: no adapter.py exists yet for that domain.
     host_discovery_adapters = HostDiscoveryAdapters(
         efi=functools.partial(read_firmware_boot_configuration, runner=command_runner),
         storage=functools.partial(read_storage_topology, runner=command_runner),
         secure_boot=functools.partial(read_secure_boot_status, runner=command_runner),
+        filesystem=functools.partial(read_filesystem_usage, runner=command_runner),
         network=collectors.collect_network,
         cpu=collectors.collect_cpu,
         memory=collectors.collect_memory,
