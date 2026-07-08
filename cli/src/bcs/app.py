@@ -208,7 +208,7 @@ def main(  # noqa: PLR0913 - global options are inherently numerous; see docs/CL
     # Host Discovery adapters, bound once to the shared command_runner above
     # - see docs/HOST_DISCOVERY_ORCHESTRATOR.md#dependency-injection-strategy---implemented.
     # secure_boot/filesystem/tpm stay unset: no adapter.py exists yet for any
-    # of them (Secure Boot currently has only models.py/parser.py).
+    # of them (Secure Boot currently has only models.py/parser.py/errors.py).
     host_discovery_adapters = HostDiscoveryAdapters(
         efi=functools.partial(read_firmware_boot_configuration, runner=command_runner),
         storage=functools.partial(read_storage_topology, runner=command_runner),

@@ -3,24 +3,25 @@
 Design: :doc:`/PLATFORM_LAYER` (``docs/PLATFORM_LAYER.md``), accepted per
 ``docs/decisions/0009-platform-layer-command-runner.md`` (``NFR-008``).
 
-This is **Platform-001, Part 3**: the immutable result model
+Implemented (Platform-001, Parts 1-4): the immutable result model
 (:class:`~bcs.platform.models.CommandResult`, Part 1), the exception
-hierarchy (:mod:`bcs.platform.errors`, Part 2), and the execution seam
-(:mod:`bcs.platform.execution`, this part - :class:`CommandRunner` and
-:class:`SubprocessCommandRunner`) exist so far.
+hierarchy (:mod:`bcs.platform.errors`, Part 2), the execution seam
+(:mod:`bcs.platform.execution` - :class:`CommandRunner` and
+:class:`SubprocessCommandRunner`, Part 3), and dependency injection via
+``bcs.context.RuntimeContext.command_runner`` (Part 4).
 
-Not yet implemented:
+``adapters/`` (see ``docs/PLATFORM_LAYER.md#how-future-adapters-use-it``)
+holds one package per domain, each built on ``CommandRunner``: ``efi``
+and ``storage`` are fully implemented; ``secureboot`` has its domain
+models, parser, and error hierarchy implemented but no ``adapter.py``
+yet; ``mount``/``rsync`` remain undesigned placeholders.
 
-- Integration with ``bcs.context.RuntimeContext`` (no
-  ``command_runner`` field yet - every command/collector still has to
-  construct its own :class:`~bcs.platform.execution.SubprocessCommandRunner`
-  explicitly).
-- ``adapters/`` - one module per external tool (``efibootmgr``,
-  ``lsblk``, ``blkid``, ``mount``, ``rsync``), each built on
-  ``CommandRunner``.
-
-Nothing in ``bcs.inventory``, ``bcs.commands``, or anywhere else in
-``cli/`` calls into this package yet.
+``bcs.inventory.discovery.HostDiscoveryOrchestrator`` calls into the
+``efi`` and ``storage`` adapters, wired at ``bcs.app.main()``'s
+composition root into ``bcs.context.RuntimeContext.host_discovery_orchestrator``
+- see ``docs/HOST_DISCOVERY_ORCHESTRATOR.md``. No CLI command passes
+that orchestrator into ``bcs.inventory.service.collect_host_inventory()``
+yet.
 """
 
 from bcs.platform.errors import (

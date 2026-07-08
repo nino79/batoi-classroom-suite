@@ -291,7 +291,7 @@ LVM logical volumes (`/dev/mapper/*`, `/dev/vg/lv`) are reported by `lsblk` as d
 
 ## Open Questions
 
-1. **Should the adapter also call `df -B1 --output=...` for usage statistics?** The existing `collectors.py` uses `os.statvfs()` for usage data. Adding `df` output to the adapter would provide filesystem usage statistics (total, used, free bytes) that could populate `FilesystemInfo`. However, this data changes frequently and may not be appropriate for a "snapshot" model. **Recommendation:** Defer; usage data can be queried live when needed.
+1. **Should the adapter also call `df -B1 --output=...` for usage statistics?** Resolved: not by extending this adapter, but by a separate Filesystem Adapter design — see [docs/FILESYSTEM_ADAPTER.md § Relationship to the Storage Adapter](FILESYSTEM_ADAPTER.md#relationship-to-the-storage-adapter) (`Proposed`, pending approval), which settles usage as a distinct domain from this adapter's topology facts rather than an enrichment of `FilesystemInfo`.
 
 2. **Should `blkid` be called per-partition or once for all?** `blkid -p -o json` returns metadata for all block devices. However, on systems with many devices, this can be slow. An alternative is to call `blkid` only for partitions identified by `lsblk`. **Recommendation:** Start with `blkid -p -o json` (all devices); optimize to per-partition calls only if profiling shows a problem.
 
@@ -307,7 +307,7 @@ This design does **not** require a new ADR. It is fully consistent with existing
 - **ADR-0009** (Platform Layer Command Runner): The adapter uses `CommandRunner` as designed in ADR-0009.
 - **ADR-0010** (EFI Adapter): This design follows the exact same architecture as ADR-0010's implementation.
 
-The Storage Adapter is the natural continuation of the architecture already accepted in ADR-0008 and ADR-0010. If the reviewer disagrees and believes a new ADR is needed, the recommendation is **ADR-0011: Storage Adapter (Block Storage, Partitions, Filesystems)**.
+The Storage Adapter is the natural continuation of the architecture already accepted in ADR-0008 and ADR-0010. No ADR was written for it. (`ADR-0011` was later assigned to an unrelated decision, the [Host Discovery Orchestrator](decisions/0011-host-discovery-orchestrator.md) — a reader following this section's original hypothetical numbering should not assume any connection to the Storage Adapter.)
 
 ## Summary of Design Decisions
 

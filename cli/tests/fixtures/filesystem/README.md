@@ -1,12 +1,13 @@
 # Filesystem Fixtures — Reserved
 
-Reserved for captured output of future filesystem/mount adapters
-(`mount`/`blkid`-backed — still tool-name placeholders in
-[docs/PLATFORM_LAYER.md § How Future Adapters Use It](../../../../docs/PLATFORM_LAYER.md#how-future-adapters-use-it);
-not designed yet).
+Reserved for captured output for the **Filesystem Adapter**
+(`bcs.platform.adapters.filesystem`, `df`-backed, see
+[docs/FILESYSTEM_ADAPTER.md](../../../../docs/FILESYSTEM_ADAPTER.md)).
+That design document exists but is **`Proposed`, pending approval** — not
+yet accepted, and nothing under this domain is implemented.
 
 **Deliberately empty.** The required command line, scenarios, and an
-inventory table will be added when that adapter's design is written and
-accepted. General collection, locale, anonymization, naming, and
-placeholder rules already apply and are in the
+inventory table will be added once that design is accepted and
+implementation begins. General collection, locale, anonymization, naming,
+and placeholder rules already apply and are in the
 [corpus root README](../README.md).

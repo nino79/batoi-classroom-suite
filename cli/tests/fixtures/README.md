@@ -9,10 +9,10 @@ tool, per the project's domain-driven naming rule
 
 | Directory | Domain | Consuming adapter |
 |---|---|---|
-| [`firmware/`](firmware/README.md) | UEFI firmware boot configuration | `bcs.platform.adapters.efi` ([docs/EFI_ADAPTER.md](../../../docs/EFI_ADAPTER.md)) — models implemented; parser/adapter pending |
-| [`storage/`](storage/README.md) | Block devices / partitions | `bcs.platform.adapters.storage` ([docs/STORAGE_ADAPTER.md](../../../docs/STORAGE_ADAPTER.md)) — models, errors, and parser implemented; `adapter.py` pending |
-| [`secureboot/`](secureboot/README.md) | Secure Boot state | reserved — no adapter designed yet |
-| [`filesystem/`](filesystem/README.md) | Filesystems / mounts | reserved — no adapter designed yet |
+| [`firmware/`](firmware/README.md) | UEFI firmware boot configuration | `bcs.platform.adapters.efi` ([docs/EFI_ADAPTER.md](../../../docs/EFI_ADAPTER.md)) — fully implemented |
+| [`storage/`](storage/README.md) | Block devices / partitions | `bcs.platform.adapters.storage` ([docs/STORAGE_ADAPTER.md](../../../docs/STORAGE_ADAPTER.md)) — fully implemented |
+| [`secureboot/`](secureboot/README.md) | Secure Boot state | `bcs.platform.adapters.secureboot` ([docs/SECURE_BOOT_ADAPTER.md](../../../docs/SECURE_BOOT_ADAPTER.md)) — models, parser, and errors implemented; `adapter.py` pending |
+| [`filesystem/`](filesystem/README.md) | Filesystems / mounts | reserved — [docs/FILESYSTEM_ADAPTER.md](../../../docs/FILESYSTEM_ADAPTER.md) designed (`Proposed`, pending approval); nothing implemented |
 
 Load fixtures in tests through the shared helpers in
 [`../fixture_utils.py`](../fixture_utils.py) — never with ad hoc `open()`

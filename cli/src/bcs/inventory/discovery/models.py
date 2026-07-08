@@ -3,9 +3,9 @@
 Design: ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#public-api``, accepted
 per ``docs/decisions/0011-host-discovery-orchestrator.md``.
 
-This module contains **only** the two data-holding types the
-orchestrator (not yet implemented - see that document's own
-``orchestrator.py``, still pending) will be built around:
+This module contains the two data-holding types
+:class:`HostDiscoveryOrchestrator` (``orchestrator.py``, implemented)
+is built around:
 
 - :class:`HostDiscoveryAdapters` - a frozen dependency-injection bundle
   of already-bound, zero-argument adapter callables, one named slot per
@@ -14,7 +14,7 @@ orchestrator (not yet implemented - see that document's own
   see
   ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#dependency-injection-strategy---implemented``.
 - :class:`HostDiscoverySnapshot` - the frozen, JSON-serializable
-  aggregate the orchestrator will produce - its only output type,
+  aggregate the orchestrator produces - its only output type,
   deliberately distinct from ``HostInventory`` itself (which has
   fields, ``identity``/``tooling``, that are not Discovery domains -
   see ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#relationship-to-host-inventory---implemented``).

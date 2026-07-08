@@ -19,7 +19,7 @@ results into one immutable snapshot.
 - It never knows how any adapter works internally - it only ever calls
   the zero-argument callables :class:`HostDiscoveryAdapters` already
   holds, already bound to whatever they need by the composition root
-  (not yet wired - see that document's own Dependency Injection
+  (``bcs.app.main()`` - see that document's own Dependency Injection
   Strategy). Its only structural dependency on the Platform Layer is
   on :class:`bcs.platform.errors.PlatformError`, the typed exception it
   isolates - a data/exception type, not an execution concern.
