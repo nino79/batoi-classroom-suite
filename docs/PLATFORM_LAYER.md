@@ -1,6 +1,6 @@
 # Platform Layer — Design Proposal (Command Runner)
 
-> **Status: Accepted; partially implemented.** The architecture below (as amended during review — see [§ Amendments Incorporated](#amendments-incorporated-during-review)) is approved. Implemented so far: `CommandResult` (Platform-001 Part 1), the `PlatformError` exception hierarchy (Part 2), `CommandRunner`/`SubprocessCommandRunner` (Part 3), and `RuntimeContext` dependency injection (Part 4 — see [§ Dependency Injection](#dependency-injection)). Not yet implemented: the Ruff enforcement scoping (item 3 below), `FakeCommandRunner`, the `FrozenModel` relocation, and every adapter's execution/parsing logic — the EFI adapter's domain models (`FirmwareBootConfiguration`/`BootEntry`) are implemented (see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) and [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md)), but its `parser.py`/`adapter.py`/`errors.py` are not, and `lsblk`/`blkid`/`mount`/`rsync` are not designed yet at all — none of `bcs.inventory`, `bcs.commands`, or any other existing code calls into the Platform Layer yet; only the wiring exists.
+> **Status: Accepted; core implemented, three Host Discovery adapters built on top of it.** The architecture below (as amended during review — see [§ Amendments Incorporated](#amendments-incorporated-during-review)) is approved. Implemented: `CommandResult` (Platform-001 Part 1), the `PlatformError` exception hierarchy (Part 2), `CommandRunner`/`SubprocessCommandRunner` (Part 3), and `RuntimeContext` dependency injection (Part 4 — see [§ Dependency Injection](#dependency-injection)). Not yet implemented: the Ruff enforcement scoping (item 3 below), `FakeCommandRunner`, and the `FrozenModel` relocation. Of the adapters built on this core: the EFI Adapter (`models.py`/`parser.py`/`adapter.py`/`errors.py`, see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) and [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md)) and the Storage Adapter (same four files, see [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md)) are both fully implemented; the Secure Boot Adapter (see [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md)) has `models.py`/`parser.py`/`errors.py` implemented but no `adapter.py` yet; `mount`/`rsync` remain undesigned placeholders. `bcs.inventory.service.collect_host_inventory()` does call into the Platform Layer today, through the EFI/Storage adapters wired into a `HostDiscoveryOrchestrator` at `bcs.app.main()`'s composition root (see [docs/HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md)) — no CLI command has been migrated to pass that orchestrator through yet, but the wiring is no longer merely potential.
 
 ## Amendments Incorporated During Review
 
@@ -52,15 +52,18 @@ cli/src/bcs/
     │                          # during review, see § Amendments Incorporated During Review
     ├── models.py               # CommandResult (frozen, JSON-serializable)
     ├── errors.py               # PlatformError and its subclasses
-    └── adapters/                # future, one module (or subpackage) per domain - see
-        ├── efi/                   # § How Future Adapters Use It - designed, see below
-        ├── lsblk.py               # listed here to show where they will live once each is
-        ├── blkid.py               # individually designed and approved - this document does
-        ├── mount.py               # not itself design their argv/output-parsing contracts.
-        └── rsync.py
+    └── adapters/                # one module (or subpackage) per domain - see
+        ├── efi/                   # § How Future Adapters Use It - implemented
+        ├── storage/                # implemented (subsumes the lsblk/blkid tool-name
+        │                          # placeholders originally sketched here - see
+        │                          # docs/STORAGE_ADAPTER.md)
+        ├── secureboot/             # models.py/parser.py/errors.py implemented,
+        │                          # adapter.py not yet - see docs/SECURE_BOOT_ADAPTER.md
+        ├── mount.py               # still an undesigned tool-name placeholder
+        └── rsync.py               # still an undesigned tool-name placeholder
 ```
 
-Per [docs/standards/naming-conventions.md § Domain-Driven Naming](standards/naming-conventions.md#domain-driven-naming) (first applied in [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md)), adapters are named after the domain they represent, not the tool they currently wrap — `efi/`, not `efibootmgr.py`. `lsblk.py`/`blkid.py`/`mount.py`/`rsync.py` above are still tool-name **placeholders**, listed only to show where those adapters will eventually live; each is expected to be reviewed for a more domain-appropriate name (e.g., something storage/filesystem-oriented rather than tool-oriented) when it is actually designed, the same way `efibootmgr.py` became `efi/`. This is not decided for any of them yet.
+Per [docs/standards/naming-conventions.md § Domain-Driven Naming](standards/naming-conventions.md#domain-driven-naming) (first applied in [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md)), adapters are named after the domain they represent, not the tool they currently wrap — `efi/`, not `efibootmgr.py`. `mount.py`/`rsync.py` above are still tool-name **placeholders**, listed only to show where those adapters will eventually live; each is expected to be reviewed for a more domain-appropriate name (e.g., something storage/filesystem-oriented rather than tool-oriented) when it is actually designed, the same way `efibootmgr.py` became `efi/` and the originally-sketched `lsblk.py`/`blkid.py` placeholders became the single domain-named `storage/` subpackage. This is not decided for either remaining placeholder yet.
 
 A **naming note, flagged rather than decided silently**: naming this package `bcs.platform` sits alongside the stdlib `platform` module already imported (unqualified, `import platform`) in `bcs.inventory.collectors` for `platform.machine()`/`platform.system()`. The two names don't actually collide — `bcs.platform` and `platform` are distinct fully-qualified module paths, and Python resolves `from bcs.platform import CommandRunner` unambiguously — but a file that did `from bcs import platform` (unqualified) alongside a bare `import platform` would shadow one with the other. The mitigation is a one-line import-style rule (always `from bcs.platform import ...` or `import bcs.platform as ...`, never `from bcs import platform`), not a rename — the name `bcs.platform` is worth keeping because it matches this issue's own terminology ("the Platform Layer") and reads clearly next to `bcs.inventory`, `bcs.config`, `bcs.commands`. Flagged here so it isn't rediscovered as a surprise later; alternatives (`bcs.osal`, `bcs.system`, `bcs.exec`) are available if the collision risk is judged worse than the naming-consistency benefit.
 
@@ -212,10 +215,10 @@ flowchart TB
         Execution["platform.execution\nCommandRunner (Protocol)\nSubprocessCommandRunner"]
     end
 
-    subgraph FutureAdapters["Adapters - approved shape, not implemented"]
-        Efi["platform.adapters.efi\n(designed - ADR-0010)"]
-        Lsblk["platform.adapters.lsblk"]
-        Blkid["platform.adapters.blkid"]
+    subgraph FutureAdapters["Adapters - efi/storage/secureboot implemented (secureboot: no adapter.py yet); mount/rsync still placeholders"]
+        Efi["platform.adapters.efi\n(implemented - ADR-0010)"]
+        Storage["platform.adapters.storage\n(implemented)"]
+        SecureBoot["platform.adapters.secureboot\n(models/parser/errors implemented)"]
         Mount["platform.adapters.mount"]
         Rsync["platform.adapters.rsync"]
     end
@@ -236,13 +239,12 @@ flowchart TB
     Execution --> Logging
 
     Efi --> Execution
-    Lsblk --> Execution
-    Blkid --> Execution
+    Storage --> Execution
+    SecureBoot --> Execution
     Mount --> Execution
     Rsync --> Execution
 
-    Inventory -.optional future dependency.-> Lsblk
-    Inventory -.optional future dependency.-> Blkid
+    Inventory -.optional future dependency.-> Storage
     Doctor -.optional future dependency.-> Efi
 
     Startup --> Context
@@ -263,13 +265,13 @@ Three layers, mirroring the test-layering discipline already established for Hos
 
 ## How Future Adapters Use It
 
-None of the following exist yet. This section shows the *shape* future adapters take — one module per external tool under `bcs.platform.adapters`, each a thin translation layer between raw tool output and a typed, immutable BCS model, exactly analogous to how `bcs.inventory.collectors` translates `/proc`/`/sys` file contents into typed models today. Each adapter's own command contract and output model is its own design exercise when its turn comes; nothing here should be read as pre-approving any of them. **The EFI adapter is the first exception** — it now has its own complete, accepted design as `bcs.platform.adapters.efi` (domain-named, not `.efibootmgr` — see [docs/standards/naming-conventions.md § Domain-Driven Naming](standards/naming-conventions.md#domain-driven-naming)); see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) and [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md) (status: `Accepted`, not yet implemented).
+This section originally sketched the *shape* future adapters would take — one module per external tool under `bcs.platform.adapters`, each a thin translation layer between raw tool output and a typed, immutable BCS model, exactly analogous to how `bcs.inventory.collectors` translates `/proc`/`/sys` file contents into typed models today. Of the four originally sketched below, **`efi` is now fully implemented**, and **`lsblk`/`blkid` were superseded** by a single, accepted, fully-implemented `storage` adapter (see [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md)) rather than built as two separate flat modules as originally sketched here; `mount`/`rsync` remain undesigned. The table below is kept for historical/illustrative reference to the original shape — see each adapter's own design document for its actual, current contract. **The EFI adapter was the first exception to "not designed yet"** — it now has its own complete, accepted, and implemented design as `bcs.platform.adapters.efi` (domain-named, not `.efibootmgr` — see [docs/standards/naming-conventions.md § Domain-Driven Naming](standards/naming-conventions.md#domain-driven-naming)); see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) and [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md) (status: `Accepted`, implemented).
 
 | Adapter (proposed) | Wraps | Would produce | Motivating consumer |
 |---|---|---|---|
-| `efi` (currently backed by `efibootmgr -v`) | `efibootmgr -v` | `FirmwareBootConfiguration`/`BootEntry` — see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) | Boot Manager's UEFI NVRAM boot-entry management (`BM-003`), once Boot Manager's own phase begins; also closes a concrete gap for `bcs doctor`/`bcs inventory`, which today can only report *whether* UEFI is present (`FirmwareInfo.uefi`), not what boot entries exist. |
-| `lsblk` | `lsblk -J -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE` | Richer per-partition storage detail | Directly closes the placeholder gap already documented in [`bcs.inventory.collectors.collect_storage`](../cli/src/bcs/inventory/collectors.py)/`collect_usb_storage` (today: whole-disk glob + sysfs heuristics only, no partition-level detail). |
-| `blkid` | `blkid <device>` | Filesystem UUID/type for one partition | Could replace `collect_efi_system_partition`'s current `/dev/disk/by-uuid` directory-scan heuristic (`_partition_uuid`) with a standard tool-based lookup — a candidate simplification, not a required one. |
+| `efi` (currently backed by `efibootmgr -v`) — **implemented** | `efibootmgr -v` | `FirmwareBootConfiguration`/`BootEntry` — see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) | Boot Manager's UEFI NVRAM boot-entry management (`BM-003`), once Boot Manager's own phase begins; also closes a concrete gap for `bcs doctor`/`bcs inventory`, which today can only report *whether* UEFI is present (`FirmwareInfo.uefi`), not what boot entries exist. |
+| `lsblk` — **superseded by `storage`, implemented** | `lsblk -J -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE` | Richer per-partition storage detail | Directly closed the placeholder gap this row originally documented in [`bcs.inventory.collectors.collect_storage`](../cli/src/bcs/inventory/collectors.py)/`collect_usb_storage` — see [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md) for the adapter that actually shipped. |
+| `blkid` — **superseded by `storage`, implemented** | `blkid <device>` | Filesystem UUID/type for one partition | This row's original candidate simplification (replacing `collect_efi_system_partition`'s heuristic) was not what shipped; `blkid` is instead one of the three tools the `storage` adapter composes — see [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md). |
 | `mount` | `mount` / `umount` | `CommandResult` (or a parsed mount-table model later) | Deploy's disk-layout restoration (`DEP-003`), Boot Manager's maintenance path. |
 | `rsync` | `rsync -a ...` | `CommandResult` (a parsed transfer-summary model is a future, separate design question) | Builder/Deploy artifact staging — not yet specified in any detail; explicitly out of scope here. |
 

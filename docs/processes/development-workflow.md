@@ -56,15 +56,15 @@ flowchart LR
 6. **Merge.** Squash merge is the default, keeping `main`'s history one logical change per commit. A merge commit is acceptable for a PR that's intentionally a sequence of independently-meaningful commits (e.g., a multi-ADR batch) — the author should say so in the PR description.
 7. **Changelog.** Any user- or contributor-visible change updates [CHANGELOG.md](../../CHANGELOG.md) under `[Unreleased]` as part of the same PR, not a follow-up.
 
-## CI Expectations (Once Implemented)
+## CI Expectations
 
-No CI pipeline exists yet. Once one is added, it is expected to gate merges on:
+A CI pipeline exists today ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)), scoped to `cli/`/`config/`: Ruff lint and format, mypy (strict), pytest (Python 3.12/3.13), and a `bcs` smoke-test job. It does not yet gate on:
 
 - Markdown link/anchor validity (the same check described in this project's own review process — see the link-checker approach used to validate this documentation set).
-- [ShellCheck](https://www.shellcheck.net/) and `shfmt` for any Bash (per [bash-style-guide.md](../standards/bash-style-guide.md#tooling)).
-- `bats` test suite for implemented components.
+- [ShellCheck](https://www.shellcheck.net/) and `shfmt` for any Bash (per [bash-style-guide.md](../standards/bash-style-guide.md#tooling)) — not yet relevant, since Boot Manager/Builder/Deploy have no Bash implementation yet.
+- `bats` test suite for Bash components, once they exist.
 
-Until CI exists, these checks are the reviewer's responsibility, applied manually.
+Until these are added, these specific checks are the reviewer's responsibility, applied manually.
 
 ## Definition of Done
 

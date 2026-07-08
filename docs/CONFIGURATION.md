@@ -2,7 +2,7 @@
 
 This document describes the unified BCS configuration format: a single YAML document that drives Boot Manager, Builder, and Deploy for one classroom. It is the field-by-field companion to [config/schema.yaml](../config/schema.yaml) (the normative contract) and [config/examples/default.yaml](../config/examples/default.yaml) (a fully populated reference instance).
 
-This design is documentation and schema only — no validator, no Builder ingestion, and no Deploy consumption exist yet (see [ROADMAP.md](../ROADMAP.md)). What follows is the target contract that implementation will build against.
+A CLI-level structural/semantic validator exists (`bcs validate`, see [docs/CLI.md](CLI.md#bcs-validate)), but Builder ingestion and Deploy consumption of this format do not yet (see [ROADMAP.md](../ROADMAP.md)). What follows is the target contract that implementation builds against.
 
 ## Why a Single File
 
@@ -257,7 +257,7 @@ Documented rather than silently assumed, per this project's own convention:
 
 [config/schema.yaml](../config/schema.yaml) is a [JSON Schema](https://json-schema.org/) (Draft-07) document, expressed in YAML. It is the normative contract — this document explains it, but the schema file is authoritative if the two ever disagree.
 
-No validator tool exists yet. Once Builder implementation begins, validating a `ClassroomConfig` document against this schema (e.g., with a standard JSON Schema library) should be one of the first things Builder does, and should also run as its own check under [tools/](../tools/README.md) and in CI, per [docs/processes/development-workflow.md](processes/development-workflow.md#ci-expectations-once-implemented).
+A CLI-level validator exists today: `bcs validate` (`cli/src/bcs/config/validator.py`, see [docs/CLI.md § `bcs validate`](CLI.md#bcs-validate)) validates a `ClassroomConfig` document structurally against `config/schema.yaml` and semantically (locale coverage, default-entry existence, checksum-algorithm matching, static-assignment presence), collecting every violation before reporting. It is exercised in CI's smoke-test job today. Once Builder implementation begins, validating a `ClassroomConfig` document should be one of the first things Builder does as well — reusing this same validator rather than a second implementation — and should also run as its own check under [tools/](../tools/README.md), per [docs/processes/development-workflow.md](processes/development-workflow.md#ci-expectations).
 
 ## Authoring a New Classroom Configuration
 

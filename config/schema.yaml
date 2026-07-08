@@ -8,9 +8,10 @@
 # docs/decisions/0005-yaml-as-unified-configuration-format.md for why this
 # format and structure were chosen.
 #
-# No validator tool exists yet (BCS is still pre-implementation, see
-# ROADMAP.md) — this schema is the target contract that tooling under
-# tools/ is expected to validate against once Builder is implemented.
+# A CLI-level validator exists today (`bcs validate`, see
+# cli/src/bcs/config/validator.py and docs/CLI.md); this schema is also the
+# target contract Builder's own ingestion-time validation and any future
+# tooling under tools/ are expected to validate against once implemented.
 # =============================================================================
 $schema: "http://json-schema.org/draft-07/schema#"
 $id: "bcs/v1alpha1/config.schema.yaml"

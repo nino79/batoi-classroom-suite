@@ -4,7 +4,7 @@ This guide is for anyone new to Batoi Classroom Suite (BCS) who wants to contrib
 
 ## 1. Understand What Phase We're In
 
-BCS is currently documentation-only: there is no installable software yet. Read [ROADMAP.md](../../ROADMAP.md) to see which phase is active and what's planned next. This matters because the most useful contribution right now is design review, not code.
+Boot Manager, Builder, and Deploy are still documentation-only — there is no installable software for them yet. The exception is the `bcs` CLI framework and its Platform Layer/Host Discovery subsystem (`cli/`), which are real, installable, tested Python code (see [cli/README.md](../../cli/README.md)). Read [ROADMAP.md](../../ROADMAP.md) to see which phase is active and what's planned next. This matters because, outside `cli/`, the most useful contribution right now is design review, not code.
 
 ## 2. Read in This Order
 

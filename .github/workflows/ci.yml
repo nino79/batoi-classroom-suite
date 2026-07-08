@@ -6,7 +6,7 @@ name: CI
 # the "documentation is not implementation" boundary the rest of this
 # repository draws. Extend the paths/jobs here as boot-manager/,
 # builder/, and deploy/ gain implementations of their own, per
-# docs/processes/development-workflow.md#ci-expectations-once-implemented.
+# docs/processes/development-workflow.md#ci-expectations.
 on:
   push:
     branches: [main]

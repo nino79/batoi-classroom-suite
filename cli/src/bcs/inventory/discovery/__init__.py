@@ -16,7 +16,12 @@ imports ``bcs.platform.execution.CommandRunner``.
 ``docs/HOST_DISCOVERY_ORCHESTRATOR.md#relationship-to-host-inventory---implemented``).
 Composition-root wiring (binding real adapters into a
 ``HostDiscoveryAdapters`` and constructing a ``HostDiscoveryOrchestrator``
-from it) and ``RuntimeContext`` integration do not exist yet.
+from it) and ``RuntimeContext`` integration are both implemented, in
+``bcs.app.main()`` and ``bcs.context.RuntimeContext.host_discovery_orchestrator``
+respectively - see
+``docs/HOST_DISCOVERY_ORCHESTRATOR.md#lifecycle---implemented``. No CLI
+command passes ``runtime.host_discovery_orchestrator`` into
+``collect_host_inventory()`` yet.
 """
 
 from bcs.inventory.discovery.models import HostDiscoveryAdapters, HostDiscoverySnapshot
