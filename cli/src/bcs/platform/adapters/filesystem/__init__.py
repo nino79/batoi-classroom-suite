@@ -6,24 +6,29 @@ Design: ``docs/FILESYSTEM_ADAPTER.md``, accepted. Requires no ADR - see
 architecture as ``bcs.platform.adapters.efi``/``.storage``/``.secureboot``
 (see ``docs/decisions/0010-efi-adapter-read-only-scope.md``).
 
-Implemented so far: the immutable domain models
-(:mod:`bcs.platform.adapters.filesystem.models`). Per the accepted
-design, this package will eventually also contain:
-
-- ``parser.py`` - ``parse_filesystem_usage(text: str) ->
-  FilesystemUsageReport``, a pure function.
-- ``errors.py`` - ``FilesystemError`` and its two subclasses.
-- ``adapter.py`` - ``read_filesystem_usage(runner: CommandRunner) ->
-  FilesystemUsageReport``, the only place this package calls
-  ``CommandRunner.run()``.
-
-None of those exist yet. Nothing in this package executes a process or
-imports ``subprocess``/``CommandRunner`` at this stage.
+Implemented: the immutable domain models
+(:mod:`bcs.platform.adapters.filesystem.models`), the error hierarchy
+(:mod:`bcs.platform.adapters.filesystem.errors`), the pure parser
+(:mod:`bcs.platform.adapters.filesystem.parser`), and the orchestration
+adapter (:mod:`bcs.platform.adapters.filesystem.adapter`) - the
+complete adapter as designed in ``docs/FILESYSTEM_ADAPTER.md``.
 """
 
+from bcs.platform.adapters.filesystem.adapter import read_filesystem_usage
+from bcs.platform.adapters.filesystem.errors import (
+    FilesystemError,
+    FilesystemParseError,
+    FilesystemUnavailableError,
+)
 from bcs.platform.adapters.filesystem.models import FilesystemUsage, FilesystemUsageReport
+from bcs.platform.adapters.filesystem.parser import parse_filesystem_usage
 
 __all__ = [
+    "FilesystemError",
+    "FilesystemParseError",
+    "FilesystemUnavailableError",
     "FilesystemUsage",
     "FilesystemUsageReport",
+    "parse_filesystem_usage",
+    "read_filesystem_usage",
 ]
