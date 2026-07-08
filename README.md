@@ -69,7 +69,7 @@ Boot Manager, Builder, and Deploy are independently versioned and communicate on
 
 BCS is primarily in its **architecture and specification phase**: Boot Manager, Builder, and Deploy remain documentation only, so the three components can be built independently, later, without integration surprises. The one implemented exception is the **`bcs` CLI framework** (see [cli/](cli/)) — global options, logging, configuration loading/validation, and the `version`/`doctor`/`validate` commands, with automated tests, linting, type-checking, and CI already in place.
 
-Track progress in [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
+Track progress in [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md). For a generated, single-page answer to "what is implemented today," see [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Documentation
 
@@ -78,6 +78,7 @@ Track progress in [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design, component boundaries, data flow |
 | [SPECIFICATION.md](SPECIFICATION.md) | Functional and non-functional requirements |
 | [ROADMAP.md](ROADMAP.md) | Phased delivery plan and current milestone |
+| [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) | Single-page dashboard: what is implemented today, generated from repository state |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose changes, ADRs, and contribution workflow |
 | [SECURITY.md](SECURITY.md) | Supported versions and vulnerability reporting |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |

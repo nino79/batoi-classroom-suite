@@ -6,6 +6,7 @@ This directory contains the detailed documentation for Batoi Classroom Suite (BC
 
 | Section | Purpose |
 |---|---|
+| [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Single-page dashboard answering "what is implemented today," generated from repository state — not a substitute for [ROADMAP.md](../ROADMAP.md) or [CHANGELOG.md](../CHANGELOG.md). |
 | [architecture/](architecture/) | Per-component architecture deep-dives: responsibilities, internal design, interfaces, Mermaid diagrams. |
 | [specifications/](specifications/) | Per-component functional requirements, expanding [SPECIFICATION.md](../SPECIFICATION.md). |
 | [decisions/](decisions/) | Architecture Decision Records (ADRs) — the durable "why" behind hard-to-reverse choices. |
