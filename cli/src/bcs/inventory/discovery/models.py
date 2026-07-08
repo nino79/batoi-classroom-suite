@@ -52,6 +52,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from bcs.inventory.models import CpuInfo, MemoryInfo, NetworkInterface
 from bcs.platform.adapters.efi.models import FirmwareBootConfiguration
+from bcs.platform.adapters.secureboot.models import SecureBootStatus
 from bcs.platform.adapters.storage.models import StorageConfiguration
 
 
@@ -63,9 +64,9 @@ class HostDiscoveryAdapters:
     Every field is **optional** and defaults to ``None``, meaning "no
     adapter wired in for this domain in this build" - never an error by
     itself. Fields for domains with an accepted, implemented adapter
-    (``efi``, ``storage``) are typed against that adapter's own return
-    model; fields for domains with no accepted adapter design yet
-    (``secure_boot``, ``filesystem``, ``tpm``) are typed
+    (``efi``, ``storage``, ``secure_boot``) are typed against that
+    adapter's own return model; fields for domains with no accepted
+    adapter design yet (``filesystem``, ``tpm``) are typed
     ``Callable[[], object] | None`` - deliberately generic, since there
     is no concrete model to reference yet. ``network``/``cpu``/``memory``
     reuse the existing, already-implemented ``bcs.inventory.collectors``
@@ -81,7 +82,7 @@ class HostDiscoveryAdapters:
 
     efi: Callable[[], FirmwareBootConfiguration] | None = None
     storage: Callable[[], StorageConfiguration] | None = None
-    secure_boot: Callable[[], object] | None = None
+    secure_boot: Callable[[], SecureBootStatus] | None = None
     filesystem: Callable[[], object] | None = None
     network: Callable[[], list[NetworkInterface]] | None = None
     cpu: Callable[[], CpuInfo] | None = None
@@ -129,10 +130,10 @@ class HostDiscoverySnapshot(BaseModel):
         default=None,
         description="From the `storage` adapter slot. None if unset or its call failed.",
     )
-    secure_boot: object | None = Field(
+    secure_boot: SecureBootStatus | None = Field(
         alias="secureBoot",
         default=None,
-        description=("From the `secure_boot` adapter slot. Always None until that adapter exists."),
+        description="From the `secure_boot` adapter slot. None if unset or its call failed.",
     )
     filesystem: object | None = Field(
         default=None,

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from bcs.inventory.discovery.models import HostDiscoveryAdapters, HostDiscoverySnapshot
 from bcs.inventory.models import CpuInfo, MemoryInfo, NetworkInterface
 from bcs.platform.adapters.efi.models import FirmwareBootConfiguration
+from bcs.platform.adapters.secureboot.models import SecureBootState, SecureBootStatus
 from bcs.platform.adapters.storage.models import StorageConfiguration
 
 
@@ -17,6 +18,10 @@ def _make_firmware_boot_configuration() -> FirmwareBootConfiguration:
 
 def _make_storage_configuration() -> StorageConfiguration:
     return StorageConfiguration()
+
+
+def _make_secure_boot_status() -> SecureBootStatus:
+    return SecureBootStatus(state=SecureBootState.ENABLED, raw_text="SecureBoot enabled\n")
 
 
 def _make_cpu_info() -> CpuInfo:
@@ -76,6 +81,7 @@ def test_adapters_defaults_are_all_none() -> None:
 def test_adapters_construction_with_all_slots_bound() -> None:
     efi_callable = _make_firmware_boot_configuration
     storage_callable = _make_storage_configuration
+    secure_boot_callable = _make_secure_boot_status
     cpu_callable = _make_cpu_info
     memory_callable = _make_memory_info
     network_callable = lambda: [_make_network_interface()]  # noqa: E731
@@ -83,7 +89,7 @@ def test_adapters_construction_with_all_slots_bound() -> None:
     adapters = HostDiscoveryAdapters(
         efi=efi_callable,
         storage=storage_callable,
-        secure_boot=lambda: object(),
+        secure_boot=secure_boot_callable,
         filesystem=lambda: object(),
         network=network_callable,
         cpu=cpu_callable,
@@ -98,7 +104,8 @@ def test_adapters_construction_with_all_slots_bound() -> None:
     assert adapters.memory is memory_callable
     assert adapters.network is network_callable
     assert adapters.network() == [_make_network_interface()]
-    assert callable(adapters.secure_boot)
+    assert adapters.secure_boot is secure_boot_callable
+    assert adapters.secure_boot() == _make_secure_boot_status()
     assert callable(adapters.filesystem)
     assert callable(adapters.tpm)
 
@@ -172,14 +179,22 @@ def test_snapshot_populate_by_name_accepts_camel_case_aliases() -> None:
     assert snapshot.storage_topology is not None
 
 
-def test_snapshot_accepts_opaque_secure_boot_filesystem_tpm_values() -> None:
-    """secure_boot/filesystem/tpm are typed `object | None` - deliberately
-    generic since no adapter design exists yet for any of them.
+def test_snapshot_accepts_opaque_filesystem_tpm_values() -> None:
+    """filesystem/tpm are typed `object | None` - deliberately generic
+    since no adapter design exists yet for either of them.
     """
-    snapshot = _make_snapshot(secure_boot="placeholder", filesystem={"k": "v"}, tpm=123)
-    assert snapshot.secure_boot == "placeholder"
+    snapshot = _make_snapshot(filesystem={"k": "v"}, tpm=123)
     assert snapshot.filesystem == {"k": "v"}
     assert snapshot.tpm == 123
+
+
+def test_snapshot_accepts_secure_boot_status() -> None:
+    """secure_boot is typed `SecureBootStatus | None` - the concrete
+    model, now that the Secure Boot Adapter is accepted and implemented.
+    """
+    status = _make_secure_boot_status()
+    snapshot = _make_snapshot(secure_boot=status)
+    assert snapshot.secure_boot == status
 
 
 def test_snapshot_caveats_can_be_populated() -> None:

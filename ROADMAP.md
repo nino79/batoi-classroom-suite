@@ -23,7 +23,7 @@ Status legend: ✅ Done · 🚧 In progress · ⏳ Planned · 💤 Not started
 | Platform Layer / Command Runner design (`docs/PLATFORM_LAYER.md`, [ADR-0009](docs/decisions/0009-platform-layer-command-runner.md) — Accepted) | ✅ |
 | EFI Adapter design, first Host Discovery adapter (`docs/EFI_ADAPTER.md`, [ADR-0010](docs/decisions/0010-efi-adapter-read-only-scope.md) — Accepted); fully implemented | ✅ |
 | Storage Adapter, second Host Discovery adapter (`docs/STORAGE_ADAPTER.md`); fully implemented | ✅ |
-| Secure Boot Adapter, third Host Discovery adapter (`docs/SECURE_BOOT_ADAPTER.md`); domain models, parser, and error hierarchy implemented, execution layer (`adapter.py`) not yet | 🚧 |
+| Secure Boot Adapter, third Host Discovery adapter (`docs/SECURE_BOOT_ADAPTER.md`); fully implemented | ✅ |
 | Host Discovery Orchestrator design (`docs/HOST_DISCOVERY_ORCHESTRATOR.md`, [ADR-0011](docs/decisions/0011-host-discovery-orchestrator.md) — Accepted); implemented end to end, including `RuntimeContext`/composition-root wiring | ✅ |
 
 This phase's primary output is the documentation set in this repository. The one exception is the `bcs` CLI framework itself (`--help`, `version`, `doctor`, `validate`, with `build`/`install`/`deploy`/`backup`/`restore`/`update`/`config` as unimplemented stubs) — a deliberate, scoped exception, not a sign Boot Manager/Builder/Deploy implementation has started; those remain gated on this phase's review before Phase 1 begins.

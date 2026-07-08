@@ -71,9 +71,7 @@ def read_secure_boot_status(
        ``setup_mode is None`` - meaning the source text contained no
        recognized line at all - raises
        :class:`~bcs.platform.adapters.secureboot.errors.SecureBootParseError`,
-       per [docs/SECURE_BOOT_ADAPTER.md § Adapter
-       Responsibilities](../../../../../docs/SECURE_BOOT_ADAPTER.md#adapter-responsibilities)
-       point 4.
+       per ``docs/SECURE_BOOT_ADAPTER.md#adapter-responsibilities`` point 4.
     3. On non-zero exit: raises
        :class:`~bcs.platform.adapters.secureboot.errors.SecureBootUnavailableError`
        if stderr is recognisably an "environment cannot provide Secure

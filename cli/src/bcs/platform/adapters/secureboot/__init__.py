@@ -1,34 +1,27 @@
 """The Secure Boot Adapter: BCS's read-only Host Discovery adapter for
 firmware Secure Boot state.
 
-Design: ``docs/SECURE_BOOT_ADAPTER.md``. Requires no ADR - see
-``docs/SECURE_BOOT_ADAPTER.md#adr-recommendation`` - following the same
-architecture as ``bcs.platform.adapters.efi`` (see
+Design: ``docs/SECURE_BOOT_ADAPTER.md``, accepted. Requires no ADR -
+see ``docs/SECURE_BOOT_ADAPTER.md#adr-recommendation`` - following the
+same architecture as ``bcs.platform.adapters.efi`` (see
 ``docs/decisions/0010-efi-adapter-read-only-scope.md``).
 
-Implemented so far: the immutable domain models
+Implemented: the immutable domain models
 (:mod:`bcs.platform.adapters.secureboot.models`), the error hierarchy
-(:mod:`bcs.platform.adapters.secureboot.errors`), and the pure parser
-(:mod:`bcs.platform.adapters.secureboot.parser`,
-``parse_secure_boot_status(text: str) -> SecureBootStatus`` - not yet
-re-exported from this package's own top level; import it directly from
-``bcs.platform.adapters.secureboot.parser`` for now). Per the accepted
-design, this package will eventually also contain:
-
-- ``adapter.py`` - ``read_secure_boot_status(runner: CommandRunner) ->
-  SecureBootStatus``, the only place this package calls
-  ``CommandRunner.run()``.
-
-That does not exist yet. Nothing in this package executes a process or
-imports ``subprocess``/``CommandRunner`` at this stage.
+(:mod:`bcs.platform.adapters.secureboot.errors`), the pure parser
+(:mod:`bcs.platform.adapters.secureboot.parser`), and the orchestration
+adapter (:mod:`bcs.platform.adapters.secureboot.adapter`) - the
+complete adapter as designed in ``docs/SECURE_BOOT_ADAPTER.md``.
 """
 
+from bcs.platform.adapters.secureboot.adapter import read_secure_boot_status
 from bcs.platform.adapters.secureboot.errors import (
     SecureBootError,
     SecureBootParseError,
     SecureBootUnavailableError,
 )
 from bcs.platform.adapters.secureboot.models import SecureBootState, SecureBootStatus
+from bcs.platform.adapters.secureboot.parser import parse_secure_boot_status
 
 __all__ = [
     "SecureBootError",
@@ -36,4 +29,6 @@ __all__ = [
     "SecureBootState",
     "SecureBootStatus",
     "SecureBootUnavailableError",
+    "parse_secure_boot_status",
+    "read_secure_boot_status",
 ]

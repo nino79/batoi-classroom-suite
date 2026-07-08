@@ -1,6 +1,6 @@
 # Platform Layer — Design Proposal (Command Runner)
 
-> **Status: Accepted; core implemented, three Host Discovery adapters built on top of it.** The architecture below (as amended during review — see [§ Amendments Incorporated](#amendments-incorporated-during-review)) is approved. Implemented: `CommandResult` (Platform-001 Part 1), the `PlatformError` exception hierarchy (Part 2), `CommandRunner`/`SubprocessCommandRunner` (Part 3), and `RuntimeContext` dependency injection (Part 4 — see [§ Dependency Injection](#dependency-injection)). Not yet implemented: the Ruff enforcement scoping (item 3 below), `FakeCommandRunner`, and the `FrozenModel` relocation. Of the adapters built on this core: the EFI Adapter (`models.py`/`parser.py`/`adapter.py`/`errors.py`, see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) and [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md)) and the Storage Adapter (same four files, see [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md)) are both fully implemented; the Secure Boot Adapter (see [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md)) has `models.py`/`parser.py`/`errors.py` implemented but no `adapter.py` yet; `mount`/`rsync` remain undesigned placeholders. `bcs.inventory.service.collect_host_inventory()` does call into the Platform Layer today, through the EFI/Storage adapters wired into a `HostDiscoveryOrchestrator` at `bcs.app.main()`'s composition root (see [docs/HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md)) — no CLI command has been migrated to pass that orchestrator through yet, but the wiring is no longer merely potential.
+> **Status: Accepted; core implemented, three Host Discovery adapters built on top of it.** The architecture below (as amended during review — see [§ Amendments Incorporated](#amendments-incorporated-during-review)) is approved. Implemented: `CommandResult` (Platform-001 Part 1), the `PlatformError` exception hierarchy (Part 2), `CommandRunner`/`SubprocessCommandRunner` (Part 3), and `RuntimeContext` dependency injection (Part 4 — see [§ Dependency Injection](#dependency-injection)). Not yet implemented: the Ruff enforcement scoping (item 3 below), `FakeCommandRunner`, and the `FrozenModel` relocation. Of the adapters built on this core: the EFI Adapter (`models.py`/`parser.py`/`adapter.py`/`errors.py`, see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md) and [ADR-0010](decisions/0010-efi-adapter-read-only-scope.md)), the Storage Adapter (same four files, see [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md)), and the Secure Boot Adapter (same four files, see [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md)) are all fully implemented; `mount`/`rsync` remain undesigned placeholders. `bcs.inventory.service.collect_host_inventory()` does call into the Platform Layer today, through the EFI/Storage/Secure Boot adapters wired into a `HostDiscoveryOrchestrator` at `bcs.app.main()`'s composition root (see [docs/HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md)) — no CLI command has been migrated to pass the orchestrator through yet, and `secure_boot` is not folded into `HostInventory`'s own schema, but the wiring is no longer merely potential.
 
 ## Amendments Incorporated During Review
 
@@ -57,8 +57,7 @@ cli/src/bcs/
         ├── storage/                # implemented (subsumes the lsblk/blkid tool-name
         │                          # placeholders originally sketched here - see
         │                          # docs/STORAGE_ADAPTER.md)
-        ├── secureboot/             # models.py/parser.py/errors.py implemented,
-        │                          # adapter.py not yet - see docs/SECURE_BOOT_ADAPTER.md
+        ├── secureboot/             # implemented - see docs/SECURE_BOOT_ADAPTER.md
         ├── mount.py               # still an undesigned tool-name placeholder
         └── rsync.py               # still an undesigned tool-name placeholder
 ```
@@ -215,10 +214,10 @@ flowchart TB
         Execution["platform.execution\nCommandRunner (Protocol)\nSubprocessCommandRunner"]
     end
 
-    subgraph FutureAdapters["Adapters - efi/storage/secureboot implemented (secureboot: no adapter.py yet); mount/rsync still placeholders"]
+    subgraph FutureAdapters["Adapters - efi/storage/secureboot implemented; mount/rsync still placeholders"]
         Efi["platform.adapters.efi\n(implemented - ADR-0010)"]
         Storage["platform.adapters.storage\n(implemented)"]
-        SecureBoot["platform.adapters.secureboot\n(models/parser/errors implemented)"]
+        SecureBoot["platform.adapters.secureboot\n(implemented)"]
         Mount["platform.adapters.mount"]
         Rsync["platform.adapters.rsync"]
     end
@@ -314,7 +313,7 @@ The architecture is approved. Status per item, updated as implementation proceed
 ## Open Questions / Explicitly Deferred
 
 - **Migrating `bcs.inventory.collectors` to accept an injected `CommandRunner`** — resolved, not by migrating any existing collector's signature, but by the Host Discovery Orchestrator (`docs/HOST_DISCOVERY_ORCHESTRATOR.md`, `Accepted`, implemented): `collect_host_inventory()` gained a separate, optional `orchestrator` parameter instead, so `collect_storage()` and friends were never changed. See [docs/HOST_DISCOVERY_ORCHESTRATOR.md § Related Documents](HOST_DISCOVERY_ORCHESTRATOR.md#related-documents).
-- **Each individual adapter's command contract and output model** (`mount`, `rsync`) remains not designed by this document. `lsblk`/`blkid` were superseded by the fully-implemented `storage` adapter, and `efi`/`secureboot` are also now designed separately (`secureboot`'s `adapter.py` still outstanding) — see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md), [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md), and [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md). A fourth domain, filesystem usage, also has a design proposal — see [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) (`Proposed`, pending approval).
+- **Each individual adapter's command contract and output model** (`mount`, `rsync`) remains not designed by this document. `lsblk`/`blkid` were superseded by the fully-implemented `storage` adapter, and `efi`/`secureboot` are also now designed and fully implemented separately — see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md), [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md), and [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md). A fourth domain, filesystem usage, also has a design proposal — see [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) (`Proposed`, pending approval).
 - **A "passthrough" mode for `CommandRunner`** (inherited stdio, for a hypothetical future interactive use case closer to plugin dispatch) is noted as conceivable in [§ Relationship to Existing Code](#relationship-to-existing-code) but not designed — no concrete consumer needs it today.
 - **Whether `CommandRunner.run()` should warn (lint-time or run-time) when called without a `timeout_seconds`** is noted in [§ CommandRunner API](#commandrunner-api) as desirable but not designed in enforcement detail here.
 

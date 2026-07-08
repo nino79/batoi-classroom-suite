@@ -19,6 +19,7 @@ from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
 from bcs.inventory.models import CpuInfo, MemoryInfo, NetworkInterface
 from bcs.platform.adapters.efi.errors import FirmwareBootUnavailableError
 from bcs.platform.adapters.efi.models import FirmwareBootConfiguration
+from bcs.platform.adapters.secureboot.models import SecureBootState, SecureBootStatus
 from bcs.platform.adapters.storage.errors import StorageUnavailableError
 from bcs.platform.adapters.storage.models import StorageConfiguration
 from bcs.platform.errors import PlatformError
@@ -48,6 +49,10 @@ def _make_firmware_boot_configuration() -> FirmwareBootConfiguration:
 
 def _make_storage_configuration() -> StorageConfiguration:
     return StorageConfiguration()
+
+
+def _make_secure_boot_status() -> SecureBootStatus:
+    return SecureBootStatus(state=SecureBootState.ENABLED, raw_text="SecureBoot enabled\n")
 
 
 def _make_cpu_info() -> CpuInfo:
@@ -115,7 +120,7 @@ def test_all_adapters_configured_snapshot_contents() -> None:
     adapters = HostDiscoveryAdapters(
         efi=_CountingAdapter(_make_firmware_boot_configuration()),
         storage=_CountingAdapter(_make_storage_configuration()),
-        secure_boot=_CountingAdapter("secure-boot-placeholder"),
+        secure_boot=_CountingAdapter(_make_secure_boot_status()),
         filesystem=_CountingAdapter({"placeholder": True}),
         network=_CountingAdapter(_make_network_interfaces()),
         cpu=_CountingAdapter(_make_cpu_info()),
@@ -126,7 +131,7 @@ def test_all_adapters_configured_snapshot_contents() -> None:
 
     assert snapshot.firmware_boot_configuration == _make_firmware_boot_configuration()
     assert snapshot.storage_topology == _make_storage_configuration()
-    assert snapshot.secure_boot == "secure-boot-placeholder"
+    assert snapshot.secure_boot == _make_secure_boot_status()
     assert snapshot.filesystem == {"placeholder": True}
     assert snapshot.network == tuple(_make_network_interfaces())
     assert snapshot.cpu == _make_cpu_info()
@@ -270,9 +275,9 @@ def test_execution_order_matches_declared_field_order() -> None:
         calls.append("storage")
         return _make_storage_configuration()
 
-    def _secure_boot() -> object:
+    def _secure_boot() -> SecureBootStatus:
         calls.append("secure_boot")
-        return None
+        return _make_secure_boot_status()
 
     def _filesystem() -> object:
         calls.append("filesystem")
@@ -322,7 +327,7 @@ def test_every_configured_adapter_is_called_exactly_once() -> None:
     adapters_kwargs = {
         "efi": _CountingAdapter(_make_firmware_boot_configuration()),
         "storage": _CountingAdapter(_make_storage_configuration()),
-        "secure_boot": _CountingAdapter(None),
+        "secure_boot": _CountingAdapter(_make_secure_boot_status()),
         "filesystem": _CountingAdapter(None),
         "network": _CountingAdapter(_make_network_interfaces()),
         "cpu": _CountingAdapter(_make_cpu_info()),
