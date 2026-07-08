@@ -58,6 +58,7 @@ cli/src/bcs/
         │                          # placeholders originally sketched here - see
         │                          # docs/STORAGE_ADAPTER.md)
         ├── secureboot/             # implemented - see docs/SECURE_BOOT_ADAPTER.md
+        ├── filesystem/             # implemented - see docs/FILESYSTEM_ADAPTER.md
         ├── mount.py               # still an undesigned tool-name placeholder
         └── rsync.py               # still an undesigned tool-name placeholder
 ```
@@ -313,7 +314,7 @@ The architecture is approved. Status per item, updated as implementation proceed
 ## Open Questions / Explicitly Deferred
 
 - **Migrating `bcs.inventory.collectors` to accept an injected `CommandRunner`** — resolved, not by migrating any existing collector's signature, but by the Host Discovery Orchestrator (`docs/HOST_DISCOVERY_ORCHESTRATOR.md`, `Accepted`, implemented): `collect_host_inventory()` gained a separate, optional `orchestrator` parameter instead, so `collect_storage()` and friends were never changed. See [docs/HOST_DISCOVERY_ORCHESTRATOR.md § Related Documents](HOST_DISCOVERY_ORCHESTRATOR.md#related-documents).
-- **Each individual adapter's command contract and output model** (`mount`, `rsync`) remains not designed by this document. `lsblk`/`blkid` were superseded by the fully-implemented `storage` adapter, and `efi`/`secureboot` are also now designed and fully implemented separately — see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md), [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md), and [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md). A fourth domain, filesystem usage, also has a design proposal — see [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) (`Proposed`, pending approval).
+- **Each individual adapter's command contract and output model** (`mount`, `rsync`) remains not designed by this document. `lsblk`/`blkid` were superseded by the fully-implemented `storage` adapter, and `efi`/`secureboot`/`filesystem` are also now designed and fully implemented separately — see [docs/EFI_ADAPTER.md](EFI_ADAPTER.md), [docs/STORAGE_ADAPTER.md](STORAGE_ADAPTER.md), [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md), and [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md).
 - **A "passthrough" mode for `CommandRunner`** (inherited stdio, for a hypothetical future interactive use case closer to plugin dispatch) is noted as conceivable in [§ Relationship to Existing Code](#relationship-to-existing-code) but not designed — no concrete consumer needs it today.
 - **Whether `CommandRunner.run()` should warn (lint-time or run-time) when called without a `timeout_seconds`** is noted in [§ CommandRunner API](#commandrunner-api) as desirable but not designed in enforcement detail here.
 

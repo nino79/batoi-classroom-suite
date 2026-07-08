@@ -108,12 +108,12 @@ def test_orchestrator_is_rebuilt_fresh_on_each_invocation(
     assert captured[0] is not captured[1]
 
 
-def test_efi_storage_and_secure_boot_adapters_share_the_same_command_runner_as_the_context(
+def test_command_runner_backed_adapters_share_the_same_command_runner_as_the_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The efi/storage/secure_boot adapter slots are bound to the exact
-    same CommandRunner instance RuntimeContext.command_runner carries -
-    not a second, independently constructed one.
+    """The efi/storage/secure_boot/filesystem adapter slots are bound to
+    the exact same CommandRunner instance RuntimeContext.command_runner
+    carries - not a second, independently constructed one.
     """
     captured: dict[str, object] = {}
     real_adapters = app_module.HostDiscoveryAdapters
@@ -123,6 +123,7 @@ def test_efi_storage_and_secure_boot_adapters_share_the_same_command_runner_as_t
         captured["efi"] = kwargs["efi"]
         captured["storage"] = kwargs["storage"]
         captured["secure_boot"] = kwargs["secure_boot"]
+        captured["filesystem"] = kwargs["filesystem"]
         return real_adapters(*args, **kwargs)
 
     def _capturing_runtime_context(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -139,21 +140,24 @@ def test_efi_storage_and_secure_boot_adapters_share_the_same_command_runner_as_t
     efi_callable = captured["efi"]
     storage_callable = captured["storage"]
     secure_boot_callable = captured["secure_boot"]
+    filesystem_callable = captured["filesystem"]
     assert isinstance(efi_callable, functools.partial)
     assert efi_callable.keywords["runner"] is command_runner
     assert isinstance(storage_callable, functools.partial)
     assert storage_callable.keywords["runner"] is command_runner
     assert isinstance(secure_boot_callable, functools.partial)
     assert secure_boot_callable.keywords["runner"] is command_runner
+    assert isinstance(filesystem_callable, functools.partial)
+    assert filesystem_callable.keywords["runner"] is command_runner
 
 
 def test_adapters_bundle_wiring_matches_design(monkeypatch: pytest.MonkeyPatch) -> None:
     """network/cpu/memory are already zero-argument (bcs.inventory.collectors)
     and are bound directly, with no functools.partial needed - see
     docs/HOST_DISCOVERY_ORCHESTRATOR.md#dependency-injection-strategy---implemented.
-    efi/storage/secure_boot are bound via functools.partial to the shared
-    command_runner. filesystem/tpm stay unset: no adapter.py exists yet
-    for either of them.
+    efi/storage/secure_boot/filesystem are bound via functools.partial to
+    the shared command_runner. tpm stays unset: no adapter.py exists yet
+    for that domain.
     """
     captured: dict[str, object] = {}
     real_adapters = app_module.HostDiscoveryAdapters
@@ -173,7 +177,7 @@ def test_adapters_bundle_wiring_matches_design(monkeypatch: pytest.MonkeyPatch) 
     assert isinstance(captured["efi"], functools.partial)
     assert isinstance(captured["storage"], functools.partial)
     assert isinstance(captured["secure_boot"], functools.partial)
-    assert captured.get("filesystem") is None
+    assert isinstance(captured["filesystem"], functools.partial)
     assert captured.get("tpm") is None
 
 

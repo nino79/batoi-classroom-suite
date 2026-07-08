@@ -149,10 +149,11 @@ _VALID_FINDMNT = (
     '"fstype": "vfat", "options": "rw,relatime"}]}'
 )
 _VALID_MOKUTIL = "SecureBoot enabled\nSetupMode disabled\n"
-_VALID_DF = (
-    "Filesystem Type 1K-blocks Used Available Size Used% Mounted on\n"
-    "/dev/nvme0n1p1 vfat 524288 112 524176 524288 1% /boot/efi\n"
-)
+# Column order matches the adapter's real invocation exactly:
+# source, fstype, itotal, iused, iavail, size, used, avail, target.
+# '-' inode fields mirror real df behaviour for vfat (no fixed inode
+# allocation) - see docs/FILESYSTEM_ADAPTER.md#parser-architecture.
+_VALID_DF = "/dev/nvme0n1p1 vfat - - - 524288000 104857600 419430400 /boot/efi\n"
 
 
 def _make_result(*, stdout: str = "", stderr: str = "", exit_code: int = 0) -> FakeCommandResult:
@@ -264,6 +265,7 @@ def test_one_adapter_failing_isolates_into_one_caveat_others_unaffected() -> Non
             "lsblk": _make_result(stdout=_VALID_LSBLK),
             "blkid": _make_result(stdout=_VALID_BLKID),
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
+            "df": _make_result(stdout=_VALID_DF),
         },
         not_found_tools=frozenset({"mokutil"}),
     )
@@ -272,6 +274,7 @@ def test_one_adapter_failing_isolates_into_one_caveat_others_unaffected() -> Non
     assert snapshot.firmware_boot_configuration is not None
     assert snapshot.storage_topology is not None
     assert snapshot.secure_boot is None
+    assert snapshot.filesystem is not None
     assert snapshot.cpu is not None
     assert snapshot.memory is not None
 
@@ -293,13 +296,74 @@ def test_unavailable_stderr_produces_the_domain_specific_exception_in_the_caveat
             "blkid": _make_result(stdout=_VALID_BLKID),
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
             "mokutil": _make_result(stderr="Permission denied", exit_code=1),
+            "df": _make_result(stdout=_VALID_DF),
         },
     )
     snapshot = HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
 
     assert snapshot.secure_boot is None
+    assert snapshot.filesystem is not None
     assert len(snapshot.caveats) == 1
     assert snapshot.caveats[0].startswith("secure_boot: SecureBootUnavailableError:")
+
+
+def test_filesystem_failure_isolates_into_its_own_caveat() -> None:
+    """A CommandNotFoundError from df is isolated into exactly one
+    caveats entry under the 'filesystem' domain name - efi/storage/
+    secure_boot still succeed, mirroring the mokutil-specific case
+    above but for the fourth wired adapter.
+    """
+    runner = FakeCommandRunner(
+        results={
+            "efibootmgr": _make_result(stdout=_VALID_EFIBOOTMGR),
+            "lsblk": _make_result(stdout=_VALID_LSBLK),
+            "blkid": _make_result(stdout=_VALID_BLKID),
+            "findmnt": _make_result(stdout=_VALID_FINDMNT),
+            "mokutil": _make_result(stdout=_VALID_MOKUTIL),
+        },
+        not_found_tools=frozenset({"df"}),
+    )
+    snapshot = HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
+
+    assert snapshot.firmware_boot_configuration is not None
+    assert snapshot.storage_topology is not None
+    assert snapshot.secure_boot is not None
+    assert snapshot.filesystem is None
+
+    assert len(snapshot.caveats) == 1
+    assert snapshot.caveats[0] == "filesystem: CommandNotFoundError: df not found"
+
+
+def test_filesystem_partial_failure_is_not_a_caveat_but_raw_stderr_carries_it() -> None:
+    """The Filesystem Adapter's own unique judgment call, visible at the
+    full-pipeline level: a non-zero df exit that still yields at least
+    one parsed filesystem is *not* isolated into a caveats entry (the
+    orchestrator only ever sees a raised PlatformError, and none was
+    raised here) - the failure signal instead survives on
+    FilesystemUsageReport.raw_stderr, one layer below where caveats
+    operates. See docs/FILESYSTEM_ADAPTER.md#relationship-to-the-host-
+    discovery-orchestrators-caveats-model.
+    """
+    runner = FakeCommandRunner(
+        results={
+            "efibootmgr": _make_result(stdout=_VALID_EFIBOOTMGR),
+            "lsblk": _make_result(stdout=_VALID_LSBLK),
+            "blkid": _make_result(stdout=_VALID_BLKID),
+            "findmnt": _make_result(stdout=_VALID_FINDMNT),
+            "mokutil": _make_result(stdout=_VALID_MOKUTIL),
+            "df": _make_result(
+                stdout=_VALID_DF,
+                stderr="df: '/mnt/stale': Stale file handle",
+                exit_code=1,
+            ),
+        },
+    )
+    snapshot = HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
+
+    assert snapshot.filesystem is not None
+    assert len(snapshot.filesystem.filesystems) == 1
+    assert snapshot.filesystem.raw_stderr == "df: '/mnt/stale': Stale file handle"
+    assert snapshot.caveats == ()
 
 
 def test_multiple_independent_failures_each_get_their_own_caveat_in_order() -> None:
@@ -313,6 +377,7 @@ def test_multiple_independent_failures_each_get_their_own_caveat_in_order() -> N
             "lsblk": _make_result(stdout=_VALID_LSBLK),
             "blkid": _make_result(stdout=_VALID_BLKID),
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
+            "df": _make_result(stdout=_VALID_DF),
         },
         not_found_tools=frozenset({"efibootmgr", "mokutil"}),
     )
@@ -321,12 +386,13 @@ def test_multiple_independent_failures_each_get_their_own_caveat_in_order() -> N
     assert snapshot.firmware_boot_configuration is None
     assert snapshot.storage_topology is not None
     assert snapshot.secure_boot is None
+    assert snapshot.filesystem is not None
     assert len(snapshot.caveats) == 2
     assert snapshot.caveats[0].startswith("efi: CommandNotFoundError:")
     assert snapshot.caveats[1].startswith("secure_boot: CommandNotFoundError:")
 
     tools_called = [call["command"][0] for call in runner.calls]
-    assert sorted(tools_called) == ["blkid", "efibootmgr", "findmnt", "lsblk", "mokutil"]
+    assert sorted(tools_called) == ["blkid", "df", "efibootmgr", "findmnt", "lsblk", "mokutil"]
 
 
 # ---------------------------------------------------------------------------

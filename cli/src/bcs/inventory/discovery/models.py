@@ -52,6 +52,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from bcs.inventory.models import CpuInfo, MemoryInfo, NetworkInterface
 from bcs.platform.adapters.efi.models import FirmwareBootConfiguration
+from bcs.platform.adapters.filesystem.models import FilesystemUsageReport
 from bcs.platform.adapters.secureboot.models import SecureBootStatus
 from bcs.platform.adapters.storage.models import StorageConfiguration
 
@@ -64,11 +65,10 @@ class HostDiscoveryAdapters:
     Every field is **optional** and defaults to ``None``, meaning "no
     adapter wired in for this domain in this build" - never an error by
     itself. Fields for domains with an accepted, implemented adapter
-    (``efi``, ``storage``, ``secure_boot``) are typed against that
-    adapter's own return model; fields for domains with no accepted
-    adapter design yet (``filesystem``, ``tpm``) are typed
+    (``efi``, ``storage``, ``secure_boot``, ``filesystem``) are typed
+    against that adapter's own return model; the ``tpm`` field is typed
     ``Callable[[], object] | None`` - deliberately generic, since there
-    is no concrete model to reference yet. ``network``/``cpu``/``memory``
+    is no accepted adapter design for that domain yet. ``network``/``cpu``/``memory``
     reuse the existing, already-implemented ``bcs.inventory.collectors``
     functions as-is (``collect_network``/``collect_cpu``/``collect_memory``
     are already zero-argument and satisfy these slots' types directly -
@@ -83,7 +83,7 @@ class HostDiscoveryAdapters:
     efi: Callable[[], FirmwareBootConfiguration] | None = None
     storage: Callable[[], StorageConfiguration] | None = None
     secure_boot: Callable[[], SecureBootStatus] | None = None
-    filesystem: Callable[[], object] | None = None
+    filesystem: Callable[[], FilesystemUsageReport] | None = None
     network: Callable[[], list[NetworkInterface]] | None = None
     cpu: Callable[[], CpuInfo] | None = None
     memory: Callable[[], MemoryInfo] | None = None
@@ -135,9 +135,9 @@ class HostDiscoverySnapshot(BaseModel):
         default=None,
         description="From the `secure_boot` adapter slot. None if unset or its call failed.",
     )
-    filesystem: object | None = Field(
+    filesystem: FilesystemUsageReport | None = Field(
         default=None,
-        description="From the `filesystem` adapter slot. Always None until that adapter exists.",
+        description="From the `filesystem` adapter slot. None if unset or its call failed.",
     )
     network: tuple[NetworkInterface, ...] = Field(
         default_factory=tuple,
