@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>IMPLEMENTATION_STATUS.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> or <div class="page"></div> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="implementation-status">Implementation Status</h1>
+<p>This is the single authoritative dashboard for <strong>what is implemented today</strong> in Batoi Classroom Suite (BCS), generated from the current state of this repository. It answers one question — &quot;what exists right now?&quot; — without requiring a reader to cross-reference <a href="../ROADMAP.md">ROADMAP.md</a>, <a href="../CHANGELOG.md">CHANGELOG.md</a>, the <a href="decisions/">ADRs</a>, or every individual design document.</p>
+<p>This document does not replace any of those — see <a href="#10-reading-guide">§ 10. Reading Guide</a>. It links to them rather than duplicating their content, and it is not itself normative: it describes state, it does not decide architecture (that's <a href="../ARCHITECTURE.md">ARCHITECTURE.md</a> and the <a href="decisions/">ADRs</a>) or record future plans (that's <a href="../ROADMAP.md">ROADMAP.md</a>).</p>
+<h2 id="1-overall-project-status">1. Overall Project Status</h2>
+<ul>
+<li><strong>Current development phase:</strong> <a href="../ROADMAP.md#phase-0--foundation-architecture--governance">Phase 0 — Foundation</a> (architecture, specification, and core infrastructure). Phases 1–5 and v1.0 GA are all still <code>⏳ Planned</code>/<code>💤 Not started</code> — see <a href="#6-phase-progress">§ 6. Phase Progress</a>.</li>
+<li><strong>Implemented subsystems:</strong> the <code>bcs</code> CLI framework (<code>version</code>/<code>doctor</code>/<code>validate</code>/<code>inventory</code> commands), the unified <code>ClassroomConfig</code> loader/validator, the Host Inventory subsystem, the Platform Layer core (<code>CommandRunner</code>/<code>CommandResult</code>/<code>PlatformError</code>), and three Host Discovery adapters (EFI, Storage, Secure Boot) fully wired into the Host Discovery Orchestrator's composition root.</li>
+<li><strong>Partially implemented subsystems:</strong> the <code>bcs</code> CLI command tree (<code>build</code>/<code>install</code>/<code>deploy</code>/<code>backup</code>/<code>restore</code>/<code>update</code>/<code>config</code> are registered stubs, per <a href="../cli/src/bcs/commands/stubs.py"><code>cli/src/bcs/commands/stubs.py</code></a>); the Host Discovery Orchestrator (implemented end to end as a component, but only 3 of its 8 named domain slots have a bound adapter, and no CLI command consumes it yet — see <a href="#5-host-discovery-status">§ 5. Host Discovery Status</a>).</li>
+<li><strong>Documentation-only components:</strong> Boot Manager, Builder, and Deploy (Phases 1–3 — each directory contains only a placeholder <code>README.md</code>, no code) and the Filesystem Adapter (<code>docs/FILESYSTEM_ADAPTER.md</code>, status <code>Proposed</code>, not yet accepted).</li>
+<li><strong>Current test count:</strong> 777 passing tests in <code>cli/</code> (<code>pytest</code>, zero failures).</li>
+<li><strong>Quality gates status:</strong> <code>mypy</code> (strict, canonical <code>mypy</code> command) — clean, 52 source files. <code>pytest</code> — 777 passed. <code>ruff check</code>/<code>ruff format --check</code> — clean across <code>cli/src/</code> and all but one test file; see <a href="#7-test-status">§ 7. Test Status</a> for the one known exception.</li>
+<li><strong>Overall implementation progress:</strong> Phase 0's documentation set is substantially in place; within it, the <code>cli/</code> framework and its Platform Layer/Host Discovery subsystem are the only components with real, tested code. Boot Manager, Builder, and Deploy (Phases 1–3) have not started.</li>
+</ul>
+<h2 id="2-architecture-components">2. Architecture Components</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Purpose</th>
+<th>Status</th>
+<th>Design</th>
+<th>Implementation</th>
+<th>Tests</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Configuration</td>
+<td>Unified <code>ClassroomConfig</code> YAML format driving all three components</td>
+<td>✅ Implemented</td>
+<td><a href="CONFIGURATION.md">docs/CONFIGURATION.md</a> (<a href="decisions/0005-yaml-as-unified-configuration-format.md">ADR-0005</a>, Accepted)</td>
+<td><code>cli/src/bcs/config/</code> — loader, models, overrides, and <code>bcs validate</code> (<code>config/validator.py</code>)</td>
+<td><code>cli/tests/test_config_*.py</code></td>
+<td>Builder/Deploy ingestion of this format is not implemented (those components don't exist yet).</td>
+</tr>
+<tr>
+<td>CLI</td>
+<td>Single entry point (<code>bcs</code>) into all three components</td>
+<td>🚧 Partially implemented</td>
+<td><a href="CLI.md">docs/CLI.md</a> (<a href="decisions/0006-bcs-unified-cli-architecture.md">ADR-0006</a>/<a href="decisions/0007-python-for-the-bcs-cli.md">ADR-0007</a>, Accepted)</td>
+<td><code>cli/src/bcs/</code> — <code>version</code>/<code>doctor</code>/<code>validate</code>/<code>inventory</code> implemented; <code>build</code>/<code>install</code>/<code>deploy</code>/<code>backup</code>/<code>restore</code>/<code>update</code>/<code>config</code> are stubs</td>
+<td><code>cli/tests/test_app_cli.py</code>, <code>test_commands_*.py</code></td>
+<td>Stub commands report &quot;not implemented in this phase&quot; and exit non-zero by design.</td>
+</tr>
+<tr>
+<td>Host Inventory</td>
+<td>Single source of truth describing the current machine</td>
+<td>✅ Implemented</td>
+<td><a href="HOST_INVENTORY.md">docs/HOST_INVENTORY.md</a> (<a href="decisions/0008-host-inventory-ports-and-adapters.md">ADR-0008</a>, Accepted)</td>
+<td><code>cli/src/bcs/inventory/</code> — 10 collector functions, <code>HostInventory</code> models, <code>collect_host_inventory()</code></td>
+<td><code>cli/tests/test_inventory_*.py</code></td>
+<td>Consumed by <code>bcs doctor</code>/<code>bcs inventory</code>. Does not yet consume the Host Discovery Orchestrator's output (see <a href="#5-host-discovery-status">§ 5</a>).</td>
+</tr>
+<tr>
+<td>Platform Layer</td>
+<td>Sole path to OS process execution for <code>cli/</code></td>
+<td>✅ Core implemented</td>
+<td><a href="PLATFORM_LAYER.md">docs/PLATFORM_LAYER.md</a> (<a href="decisions/0009-platform-layer-command-runner.md">ADR-0009</a>, Accepted)</td>
+<td><code>cli/src/bcs/platform/</code> — <code>CommandResult</code>, <code>PlatformError</code> hierarchy, <code>CommandRunner</code>/<code>SubprocessCommandRunner</code>, <code>RuntimeContext.command_runner</code> DI</td>
+<td><code>cli/tests/test_platform_*.py</code></td>
+<td>3 of 5 <a href="PLATFORM_LAYER.md#approved-design-decisions">Approved Design Decisions</a> items remain outstanding — see <a href="#8-outstanding-work">§ 8</a>.</td>
+</tr>
+<tr>
+<td>EFI Adapter</td>
+<td>Read-only UEFI firmware boot configuration wrapper</td>
+<td>✅ Fully implemented</td>
+<td><a href="EFI_ADAPTER.md">docs/EFI_ADAPTER.md</a> (<a href="decisions/0010-efi-adapter-read-only-scope.md">ADR-0010</a>, Accepted)</td>
+<td><code>cli/src/bcs/platform/adapters/efi/</code> — <code>models.py</code>/<code>parser.py</code>/<code>adapter.py</code>/<code>errors.py</code></td>
+<td><code>cli/tests/test_platform_adapters_efi_*.py</code></td>
+<td>Wired into the Host Discovery composition root (<code>efi</code> slot).</td>
+</tr>
+<tr>
+<td>Storage Adapter</td>
+<td>Read-only block/partition/filesystem topology wrapper</td>
+<td>✅ Fully implemented</td>
+<td><a href="STORAGE_ADAPTER.md">docs/STORAGE_ADAPTER.md</a> (Accepted)</td>
+<td><code>cli/src/bcs/platform/adapters/storage/</code> — same four-file shape</td>
+<td><code>cli/tests/test_platform_adapters_storage_*.py</code></td>
+<td>Wired into the Host Discovery composition root (<code>storage</code> slot).</td>
+</tr>
+<tr>
+<td>Secure Boot Adapter</td>
+<td>Read-only firmware Secure Boot state wrapper</td>
+<td>✅ Fully implemented</td>
+<td><a href="SECURE_BOOT_ADAPTER.md">docs/SECURE_BOOT_ADAPTER.md</a> (Accepted)</td>
+<td><code>cli/src/bcs/platform/adapters/secureboot/</code> — same four-file shape</td>
+<td><code>cli/tests/test_platform_adapters_secureboot_*.py</code></td>
+<td>Wired into the Host Discovery composition root (<code>secure_boot</code> slot). Not yet folded into <code>HostInventory</code>'s own schema.</td>
+</tr>
+<tr>
+<td>Host Discovery Orchestrator</td>
+<td>Coordinates every Host Discovery adapter into one snapshot</td>
+<td>✅ Implemented end to end</td>
+<td><a href="HOST_DISCOVERY_ORCHESTRATOR.md">docs/HOST_DISCOVERY_ORCHESTRATOR.md</a> (<a href="decisions/0011-host-discovery-orchestrator.md">ADR-0011</a>, Accepted)</td>
+<td><code>cli/src/bcs/inventory/discovery/</code> — data models, coordination logic, <code>RuntimeContext.host_discovery_orchestrator</code> composition-root wiring</td>
+<td><code>cli/tests/test_inventory_discovery_*.py</code>, <code>test_host_discovery_*.py</code></td>
+<td>No <code>bcs</code> command passes <code>runtime.host_discovery_orchestrator</code> into <code>collect_host_inventory()</code> yet.</td>
+</tr>
+<tr>
+<td>Filesystem Adapter</td>
+<td>Read-only filesystem usage/capacity wrapper</td>
+<td>💤 Documentation only</td>
+<td><a href="FILESYSTEM_ADAPTER.md">docs/FILESYSTEM_ADAPTER.md</a> (<code>Proposed</code>, pending approval)</td>
+<td>None</td>
+<td>None</td>
+<td>Fourth Host Discovery adapter design; the <code>filesystem</code> slot exists in <code>HostDiscoveryAdapters</code> as a reserved, generically-typed (<code>object</code>) placeholder.</td>
+</tr>
+<tr>
+<td>Network Adapter</td>
+<td>Network interface enumeration</td>
+<td>💤 No dedicated adapter</td>
+<td>—</td>
+<td><code>bcs.inventory.collectors.collect_network()</code> (existing <code>sysfs</code>-based collector), reused directly as the <code>network</code> Host Discovery slot</td>
+<td><code>cli/tests/test_inventory_collectors.py</code></td>
+<td>No tool-based Platform Layer adapter has been designed for this domain; <code>NetworkInterface.ip_addresses</code> is a documented, permanent placeholder gap in the current collector.</td>
+</tr>
+<tr>
+<td>CPU Adapter</td>
+<td>CPU facts</td>
+<td>💤 No dedicated adapter</td>
+<td>—</td>
+<td><code>bcs.inventory.collectors.collect_cpu()</code>, reused directly as the <code>cpu</code> Host Discovery slot</td>
+<td><code>cli/tests/test_inventory_collectors.py</code></td>
+<td>Same pattern as Network — no dedicated tool-based adapter designed.</td>
+</tr>
+<tr>
+<td>Memory Adapter</td>
+<td>Memory facts</td>
+<td>💤 No dedicated adapter</td>
+<td>—</td>
+<td><code>bcs.inventory.collectors.collect_memory()</code>, reused directly as the <code>memory</code> Host Discovery slot</td>
+<td><code>cli/tests/test_inventory_collectors.py</code></td>
+<td>Same pattern as Network — no dedicated tool-based adapter designed.</td>
+</tr>
+<tr>
+<td>TPM Adapter</td>
+<td>TPM facts</td>
+<td>💤 Not designed</td>
+<td>—</td>
+<td>None</td>
+<td>None</td>
+<td>A reserved slot name (<code>tpm</code>) in <a href="HOST_DISCOVERY_ORCHESTRATOR.md#public-api"><code>HostDiscoveryAdapters</code>/<code>HostDiscoverySnapshot</code></a> only; no design document exists, and no <code>SPECIFICATION.md</code> requirement currently motivates one.</td>
+</tr>
+<tr>
+<td>Boot Manager</td>
+<td>Owns the boot-time experience on each classroom PC</td>
+<td>💤 Documentation only</td>
+<td><a href="architecture/boot-manager.md">docs/architecture/boot-manager.md</a>, <a href="specifications/boot-manager.md">docs/specifications/boot-manager.md</a></td>
+<td>None (<code>boot-manager/</code> contains only a placeholder <code>README.md</code>)</td>
+<td>None</td>
+<td>Phase 1 — Planned.</td>
+</tr>
+<tr>
+<td>Builder</td>
+<td>Produces the versioned golden image</td>
+<td>💤 Documentation only</td>
+<td><a href="architecture/builder.md">docs/architecture/builder.md</a>, <a href="specifications/builder.md">docs/specifications/builder.md</a></td>
+<td>None (<code>builder/</code> contains only a placeholder <code>README.md</code>)</td>
+<td>None</td>
+<td>Phase 2 — Planned. Its configuration format (Configuration, above) is implemented; ingestion is not.</td>
+</tr>
+<tr>
+<td>Deploy</td>
+<td>Distributes golden images to classroom fleets</td>
+<td>💤 Documentation only</td>
+<td><a href="architecture/deploy.md">docs/architecture/deploy.md</a>, <a href="specifications/deploy.md">docs/specifications/deploy.md</a></td>
+<td>None (<code>deploy/</code> contains only a placeholder <code>README.md</code>)</td>
+<td>None</td>
+<td>Phase 3 — Planned.</td>
+</tr>
+</tbody>
+</table>
+<p>Legend: ✅ Implemented · 🚧 Partially implemented · 💤 Not implemented / documentation only.</p>
+<h2 id="3-adr-status">3. ADR Status</h2>
+<table>
+<thead>
+<tr>
+<th>ADR</th>
+<th>Title</th>
+<th>Status</th>
+<th>Implemented?</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="decisions/0001-record-architecture-decisions.md">0001</a></td>
+<td>Record architecture decisions</td>
+<td>Accepted</td>
+<td>N/A — process decision</td>
+<td>In effect: this is the process that produced ADRs 0002–0011.</td>
+</tr>
+<tr>
+<td><a href="decisions/0002-three-component-separation.md">0002</a></td>
+<td>Three-component separation</td>
+<td>Accepted</td>
+<td>Structurally, yes</td>
+<td>Reflected in the <code>boot-manager/</code>/<code>builder/</code>/<code>deploy/</code>/<code>cli/</code> top-level split; none of the three components has implementation code yet.</td>
+</tr>
+<tr>
+<td><a href="decisions/0003-clonezilla-as-deployment-engine.md">0003</a></td>
+<td>Clonezilla as the deployment engine</td>
+<td>Accepted</td>
+<td>Not yet</td>
+<td>Decision recorded; Deploy (Phase 3) has not started.</td>
+</tr>
+<tr>
+<td><a href="decisions/0004-bash-as-primary-implementation-language.md">0004</a></td>
+<td>Bash as the primary implementation language</td>
+<td>Accepted</td>
+<td>Not yet</td>
+<td>Applies to Boot Manager/Builder/Deploy, none of which has started; <code>cli/</code> is the documented exception (Python, <a href="decisions/0007-python-for-the-bcs-cli.md">ADR-0007</a>).</td>
+</tr>
+<tr>
+<td><a href="decisions/0005-yaml-as-unified-configuration-format.md">0005</a></td>
+<td>YAML as the unified configuration format</td>
+<td>Accepted</td>
+<td>Yes</td>
+<td><code>config/schema.yaml</code>, <code>cli/src/bcs/config/</code>.</td>
+</tr>
+<tr>
+<td><a href="decisions/0006-bcs-unified-cli-architecture.md">0006</a></td>
+<td><code>bcs</code> as a unified CLI, not three component CLIs</td>
+<td>Accepted</td>
+<td>Yes</td>
+<td><code>cli/src/bcs/app.py</code> and the command tree.</td>
+</tr>
+<tr>
+<td><a href="decisions/0007-python-for-the-bcs-cli.md">0007</a></td>
+<td>Python (Typer/Rich/Pydantic/PyYAML) for the <code>bcs</code> CLI</td>
+<td>Accepted</td>
+<td>Yes</td>
+<td>The entire <code>cli/</code> package.</td>
+</tr>
+<tr>
+<td><a href="decisions/0008-host-inventory-ports-and-adapters.md">0008</a></td>
+<td>Host Inventory as an immutable, ports-and-adapters core domain</td>
+<td>Accepted</td>
+<td>Yes</td>
+<td><code>cli/src/bcs/inventory/</code>, including its EFI System Partition/USB Storage amendment.</td>
+</tr>
+<tr>
+<td><a href="decisions/0009-platform-layer-command-runner.md">0009</a></td>
+<td>Platform Layer as the sole path to process execution</td>
+<td>Accepted</td>
+<td>Yes (core)</td>
+<td><code>cli/src/bcs/platform/</code>; see <a href="#8-outstanding-work">§ 8</a> for the small remaining items.</td>
+</tr>
+<tr>
+<td><a href="decisions/0010-efi-adapter-read-only-scope.md">0010</a></td>
+<td>EFI adapter — read-only, domain-named firmware boot configuration integration</td>
+<td>Accepted</td>
+<td>Yes</td>
+<td><code>cli/src/bcs/platform/adapters/efi/</code>, fully implemented.</td>
+</tr>
+<tr>
+<td><a href="decisions/0011-host-discovery-orchestrator.md">0011</a></td>
+<td>Host Discovery Orchestrator — coordinating discovery adapters into Host Inventory</td>
+<td>Accepted</td>
+<td>Yes</td>
+<td><code>cli/src/bcs/inventory/discovery/</code>, implemented end to end including composition-root wiring; see <a href="#5-host-discovery-status">§ 5</a> for its current scope.</td>
+</tr>
+</tbody>
+</table>
+<p>This table mirrors the authoritative index at <a href="decisions/README.md#index">docs/decisions/README.md § Index</a>; that file is the source of truth if the two ever disagree.</p>
+<h2 id="4-platform-adapter-matrix">4. Platform Adapter Matrix</h2>
+<table>
+<thead>
+<tr>
+<th>Domain</th>
+<th>Models</th>
+<th>Parser</th>
+<th>Errors</th>
+<th>Adapter</th>
+<th>Composition Root</th>
+<th>Host Discovery</th>
+<th>Tests</th>
+<th>Documentation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EFI</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ (<code>efi</code> slot)</td>
+<td>✅ Wired</td>
+<td>✅</td>
+<td><a href="EFI_ADAPTER.md">EFI_ADAPTER.md</a> — Accepted</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ (<code>storage</code> slot)</td>
+<td>✅ Wired</td>
+<td>✅</td>
+<td><a href="STORAGE_ADAPTER.md">STORAGE_ADAPTER.md</a> — Accepted</td>
+</tr>
+<tr>
+<td>Secure Boot</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅ (<code>secure_boot</code> slot)</td>
+<td>✅ Wired</td>
+<td>✅</td>
+<td><a href="SECURE_BOOT_ADAPTER.md">SECURE_BOOT_ADAPTER.md</a> — Accepted</td>
+</tr>
+<tr>
+<td>Filesystem</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌ (<code>filesystem</code> slot reserved, generic <code>object</code>-typed)</td>
+<td>❌</td>
+<td><a href="FILESYSTEM_ADAPTER.md">FILESYSTEM_ADAPTER.md</a> — <code>Proposed</code>, pending approval</td>
+</tr>
+</tbody>
+</table>
+<p>&quot;Composition Root&quot; means bound in <code>bcs.app.main()</code>'s <code>HostDiscoveryAdapters</code> construction (<code>cli/src/bcs/app.py</code>), sharing the single <code>SubprocessCommandRunner</code> instance. &quot;Host Discovery&quot; means <code>HostDiscoveryOrchestrator.discover()</code> actually invokes that slot when called. Neither implies the result reaches <code>HostInventory</code>'s own schema or any <code>bcs</code> command's output — see <a href="#5-host-discovery-status">§ 5</a>.</p>
+<h2 id="5-host-discovery-status">5. Host Discovery Status</h2>
+<p><strong>Implemented adapters</strong> (wired at the composition root, invoked by <code>HostDiscoveryOrchestrator.discover()</code>): <code>efi</code>, <code>storage</code>, <code>secure_boot</code> — see <a href="#4-platform-adapter-matrix">§ 4</a>. <code>network</code>, <code>cpu</code>, <code>memory</code> are also wired, but to the pre-existing <code>sysfs</code>-based <code>bcs.inventory.collectors</code> functions directly, not to a tool-based Platform Layer adapter.</p>
+<p><strong>Pending adapters:</strong> <code>filesystem</code> (design <code>Proposed</code>, not accepted — <a href="FILESYSTEM_ADAPTER.md">docs/FILESYSTEM_ADAPTER.md</a>) and <code>tpm</code> (not designed at all, no motivating requirement).</p>
+<p><strong>Current pipeline:</strong> <code>bcs.app.main()</code> (the composition root) constructs one <code>SubprocessCommandRunner</code>, binds it into <code>HostDiscoveryAdapters</code> (<code>efi</code>/<code>storage</code>/<code>secure_boot</code> via <code>functools.partial</code>; <code>network</code>/<code>cpu</code>/<code>memory</code> directly), constructs one <code>HostDiscoveryOrchestrator</code> from that bundle, and stores it on <code>RuntimeContext.host_discovery_orchestrator</code> — built exactly once per <code>bcs</code> invocation. Calling <code>.discover()</code> on it invokes every wired slot in the fixed order <code>efi</code>, <code>storage</code>, <code>secure_boot</code>, <code>filesystem</code>, <code>network</code>, <code>cpu</code>, <code>memory</code>, <code>tpm</code>, isolates any <code>PlatformError</code> into a <code>caveats</code> entry (<code>&quot;{domain}: {ExceptionType}: {message}&quot;</code>, per <a href="HOST_DISCOVERY_ORCHESTRATOR.md#error-propagation">ADR-0011 § Error Propagation</a>) without stopping the remaining slots, and returns one immutable <code>HostDiscoverySnapshot</code>. This whole path is exercised end to end by <code>cli/tests/test_host_discovery_pipeline.py</code>.</p>
+<p><strong>Current limitations:</strong></p>
+<ul>
+<li>No <code>bcs</code> command passes <code>runtime.host_discovery_orchestrator</code> into <code>collect_host_inventory()</code> yet — <code>bcs inventory</code>/<code>bcs doctor</code> still source every fact from the original ten collectors directly, unaffected by any Discovery adapter's presence.</li>
+<li><code>HostDiscoverySnapshot</code>'s tool-adapter-sourced fields (<code>firmwareBootConfiguration</code>, <code>storageTopology</code>, <code>secureBoot</code>) are never folded into <code>HostInventory</code>'s own schema — per <a href="decisions/0011-host-discovery-orchestrator.md">ADR-0011 Decision point 6</a>, that requires a separate, not-yet-proposed <a href="decisions/0008-host-inventory-ports-and-adapters.md">ADR-0008</a> amendment.</li>
+<li><code>filesystem</code>/<code>tpm</code> slots are always <code>None</code> — no adapter exists for either.</li>
+<li>Every fixture in <code>cli/tests/fixtures/{firmware,storage,secureboot}/</code> is still a zero-byte placeholder; no real hardware/VM output has been captured yet, so parser/adapter tests use synthetic or inline text instead.</li>
+</ul>
+<h2 id="6-phase-progress">6. Phase Progress</h2>
+<p>Full detail lives in <a href="../ROADMAP.md">ROADMAP.md</a>; this is a status count only, not a replacement.</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Items</th>
+<th>Done</th>
+<th>In progress</th>
+<th>Planned / not started</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../ROADMAP.md#phase-0--foundation-architecture--governance">Phase 0 — Foundation</a></td>
+<td>15</td>
+<td>9</td>
+<td>6</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 1 — Boot Manager</td>
+<td>5</td>
+<td>0</td>
+<td>0</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Phase 2 — Builder</td>
+<td>4</td>
+<td>1</td>
+<td>0</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Phase 3 — Deploy</td>
+<td>5</td>
+<td>0</td>
+<td>0</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Phase 4 — Integration</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Phase 5 — Hardening &amp; Scale</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+<td>4 (not started)</td>
+</tr>
+<tr>
+<td>v1.0 — General Availability</td>
+<td>3</td>
+<td>0</td>
+<td>0</td>
+<td>3 (not started)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Completed:</strong> the <code>bcs</code> CLI framework, the unified configuration format, Host Inventory, the Platform Layer core, and all three implemented Host Discovery adapters (EFI/Storage/Secure Boot) plus the Host Discovery Orchestrator — all within Phase 0.</p>
+<p><strong>In progress:</strong> the remaining Phase 0 foundational documents (project mission/README, <code>ARCHITECTURE.md</code>, <code>SPECIFICATION.md</code>, contribution workflow, initial ADRs, issue/PR templates) are marked <code>🚧</code> in ROADMAP.md — they exist but are treated as living documents, continuously refined rather than finished once.</p>
+<p><strong>Planned:</strong> Phases 1 through 4 in full, and the two Phase 5/v1.0 item groups not started at all. See <a href="../ROADMAP.md">ROADMAP.md</a> for the itemized list of what each phase actually requires.</p>
+<h2 id="7-test-status">7. Test Status</h2>
+<ul>
+<li><strong>pytest:</strong> 777 passed, 0 failed (<code>cli/</code>, run via the project's own <code>pytest</code> configuration in <code>cli/pyproject.toml</code>).</li>
+<li><strong>Coverage:</strong> 96% statement coverage overall (2,121 statements, 67 missed; 410 branches, 36 partial), measured by the same <code>pytest --cov</code> configuration CI uses. Every module under <code>bcs.platform</code> and <code>bcs.inventory.discovery</code> (the Platform Layer core and all three implemented adapters, plus the Host Discovery Orchestrator) is at 100% statement and branch coverage.</li>
+<li><strong>Ruff:</strong> <code>ruff check .</code>/<code>ruff format --check .</code> are clean across <code>cli/src/</code> and all test files except one: <code>cli/tests/test_platform_adapters_efi_adapter.py</code> has 4 pre-existing findings (an unsorted import block, one <code>PLR0913</code>, one <code>UP017</code>, one missing trailing newline) that predate the work reflected in this document and have not been fixed, since they are unrelated to any task that touched this repository so far.</li>
+<li><strong>mypy:</strong> the canonical <code>mypy</code> command (strict mode, <code>packages = [&quot;bcs&quot;]</code> per <code>cli/pyproject.toml</code>) passes cleanly across all 52 source files under <code>cli/src/bcs/</code>. Test files are covered by a relaxed <code>disallow_untyped_defs = false</code> override and are not part of the strict gate — matching <code>.github/workflows/ci.yml</code>'s own <code>mypy</code> job exactly.</li>
+<li><strong>CI:</strong> <a href="../.github/workflows/ci.yml"><code>.github/workflows/ci.yml</code></a> — four jobs (<code>lint</code>, <code>typecheck</code>, <code>test</code> on a Python 3.12/3.13 matrix, <code>cli-smoke-test</code>), gated behind an <code>all-green</code> job. Scoped via path filters to <code>cli/**</code>, <code>config/**</code>, and the workflow file itself — it does not run on documentation-only changes elsewhere in the repository, including this one.</li>
+</ul>
+<h2 id="8-outstanding-work">8. Outstanding Work</h2>
+<p>Each item links to the design document or ADR that already records it in full — this list does not restate requirements.</p>
+<p><strong>High</strong></p>
+<ul>
+<li>No <code>bcs</code> command consumes the Host Discovery Orchestrator yet — see <a href="HOST_DISCOVERY_ORCHESTRATOR.md">docs/HOST_DISCOVERY_ORCHESTRATOR.md</a>'s own status banner.</li>
+<li>Boot Manager, Builder, and Deploy (Phases 1–3) have not started — see <a href="../ROADMAP.md">ROADMAP.md</a>.</li>
+</ul>
+<p><strong>Medium</strong></p>
+<ul>
+<li>Filesystem Adapter design (<a href="FILESYSTEM_ADAPTER.md">docs/FILESYSTEM_ADAPTER.md</a>) is <code>Proposed</code>, not yet accepted or implemented.</li>
+<li>Folding Discovery-domain facts into <code>HostInventory</code>'s own schema is a separate, not-yet-proposed ADR-0008 amendment — see <a href="decisions/0011-host-discovery-orchestrator.md">ADR-0011 Decision point 6</a> and <a href="HOST_DISCOVERY_ORCHESTRATOR.md#relationship-to-host-inventory---implemented">docs/HOST_DISCOVERY_ORCHESTRATOR.md § Relationship to Host Inventory</a>.</li>
+<li><code>cli/pyproject.toml</code>'s Bandit <code>S603</code>/<code>S607</code> scoping is not yet narrowed from repository-wide to <code>bcs.plugins</code>/<code>bcs.platform.execution</code> — see <a href="PLATFORM_LAYER.md#approved-design-decisions">docs/PLATFORM_LAYER.md § Approved Design Decisions</a>, item 3.</li>
+<li>A shared <code>FakeCommandRunner</code> test double under <code>cli/tests/</code> has not been added — see <a href="PLATFORM_LAYER.md#approved-design-decisions">docs/PLATFORM_LAYER.md § Approved Design Decisions</a>, item 4.</li>
+<li>Real fixture captures for the EFI/Storage/Secure Boot corpora — every fixture under <code>cli/tests/fixtures/</code> remains a zero-byte placeholder; see each adapter document's own Fixtures Strategy section.</li>
+</ul>
+<p><strong>Low</strong></p>
+<ul>
+<li><code>FrozenModel</code>/<code>FrozenExtensibleModel</code> relocation to <code>bcs.model_utils</code> — see <a href="PLATFORM_LAYER.md#approved-design-decisions">docs/PLATFORM_LAYER.md § Approved Design Decisions</a>, item 5.</li>
+<li>Network/CPU/Memory/TPM tool-based adapters are not designed and not currently motivated by any <code>SPECIFICATION.md</code> requirement — see <a href="HOST_DISCOVERY_ORCHESTRATOR.md#future-extensibility">docs/HOST_DISCOVERY_ORCHESTRATOR.md § Future Extensibility</a>.</li>
+</ul>
+<h2 id="9-current-architecture-snapshot">9. Current Architecture Snapshot</h2>
+<p>Implemented components only — no future adapters, no Boot Manager/Builder/Deploy.</p>
+<pre><code class="language-mermaid"><div class="mermaid">flowchart TB
+    subgraph Root["bcs.app.main() - composition root"]
+        Runner["SubprocessCommandRunner\n(built once per invocation)"]
+        Adapters["HostDiscoveryAdapters"]
+        Orchestrator["HostDiscoveryOrchestrator"]
+    end
+
+    subgraph Context["RuntimeContext (frozen, built once)"]
+        CtxRunner["command_runner"]
+        CtxOrch["host_discovery_orchestrator"]
+    end
+
+    subgraph DiscoveryAdapters["Implemented Host Discovery adapters"]
+        Efi["platform.adapters.efi\nread_firmware_boot_configuration"]
+        Storage["platform.adapters.storage\nread_storage_topology"]
+        SecureBoot["platform.adapters.secureboot\nread_secure_boot_status"]
+        Collectors["inventory.collectors\ncollect_network / collect_cpu / collect_memory"]
+    end
+
+    Snapshot["HostDiscoverySnapshot"]
+
+    subgraph HostInv["Host Inventory"]
+        Service["inventory.service.collect_host_inventory()"]
+        OtherCollectors["inventory.collectors\n(7 other collectors: firmware, storage,\nesp, usb, identity, os, tooling)"]
+        Inventory["HostInventory"]
+    end
+
+    subgraph Commands["bcs commands"]
+        Doctor["bcs doctor"]
+        InventoryCmd["bcs inventory"]
+        Validate["bcs validate"]
+        Version["bcs version"]
+    end
+
+    Config["ClassroomConfig\n(config/schema.yaml, ConfigLoader)"]
+
+    Runner --> Adapters
+    Adapters --> Orchestrator
+    Orchestrator --> Efi
+    Orchestrator --> Storage
+    Orchestrator --> SecureBoot
+    Orchestrator --> Collectors
+    Efi --> Runner
+    Storage --> Runner
+    SecureBoot --> Runner
+    Orchestrator --> Snapshot
+
+    Runner --> CtxRunner
+    Orchestrator --> CtxOrch
+
+    Service --> OtherCollectors
+    Service --> Inventory
+    Doctor --> Service
+    InventoryCmd --> Service
+    Validate --> Config
+    Doctor --> Config
+
+    Snapshot -.not yet consumed by any command.-> Service
+</div></code></pre>
+<h2 id="10-reading-guide">10. Reading Guide</h2>
+<ul>
+<li><strong>If you want architecture</strong> → <a href="../ARCHITECTURE.md">ARCHITECTURE.md</a></li>
+<li><strong>If you want implementation status</strong> → this document, <code>docs/IMPLEMENTATION_STATUS.md</code></li>
+<li><strong>If you want future work</strong> → <a href="../ROADMAP.md">ROADMAP.md</a></li>
+<li><strong>If you want historical changes</strong> → <a href="../CHANGELOG.md">CHANGELOG.md</a></li>
+<li><strong>If you want design details</strong> → the individual design documents (<a href="HOST_INVENTORY.md">HOST_INVENTORY.md</a>, <a href="PLATFORM_LAYER.md">PLATFORM_LAYER.md</a>, <a href="EFI_ADAPTER.md">EFI_ADAPTER.md</a>, <a href="STORAGE_ADAPTER.md">STORAGE_ADAPTER.md</a>, <a href="SECURE_BOOT_ADAPTER.md">SECURE_BOOT_ADAPTER.md</a>, <a href="FILESYSTEM_ADAPTER.md">FILESYSTEM_ADAPTER.md</a>, <a href="HOST_DISCOVERY_ORCHESTRATOR.md">HOST_DISCOVERY_ORCHESTRATOR.md</a>, <a href="CLI.md">CLI.md</a>, <a href="CONFIGURATION.md">CONFIGURATION.md</a>)</li>
+<li><strong>If you want architectural decisions</strong> → <a href="decisions/">docs/decisions/</a> (the ADRs)</li>
+</ul>
+
+</body>
+</html>
