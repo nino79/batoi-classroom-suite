@@ -70,7 +70,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "S105", "S106", "T20", "ARG001", "PLR2004"]
+"tests/*" = ["S101", "S105", "S106", "S108", "T20", "ARG001", "ARG002", "PLR2004"]
 "src/bcs/commands/*" = ["T20"] # Rich/typer console output is the intended "print" surface
 "src/bcs/__main__.py" = ["T20"] # the one place bcs prints a final error message before exiting
 
