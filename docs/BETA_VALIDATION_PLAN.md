@@ -22,7 +22,7 @@ Define the structured validation process for Batoi Classroom Suite's Phase 0 `bc
 
 - Boot Manager, Builder, and Deploy (Phases 1–3, not yet implemented)
 - The Platform Layer adapter test suite (test-level coverage, already gated by CI)
-- The Host Discovery Orchestrator consumption path (not yet wired into any command)
+- The Host Discovery Orchestrator consumption path (`bcs inventory` consumes it; `bcs doctor` reads adapters directly per ADR-0011 — this does not need Beta re-validation)
 - Real-network PXE/multicast testing (PLAT-007 is a requirement, but the deploy command is a stub)
 - Performance profiling beyond the 5-second wall-clock cutoff
 

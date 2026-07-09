@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Beta Readiness Audit**: comprehensive `docs/BETA_READINESS_AUDIT.md` covering documentation structure, script/tooling completeness, version/naming consistency, GitHub features mapping, documentation technical debt register, proposed `docs/` reorganization plan, and release readiness assessment. Identifies 4 critical, 8 moderate, and 12 minor items to address before public Beta.
+
 - **Shared `FakeCommandRunner` testing infrastructure (Beta M6)**: consolidated `FakeCommandRunner` + `build_command_result` at `cli/tests/fake_command_runner.py`, replacing 6 locally-defined triples across adapter and pipeline test files. Supports single-result mode (EFI, Secure Boot, Filesystem, Network) and multi-tool mode (Storage, Pipeline), real `CommandResult` return values (not `MagicMock`), error simulation via `not_found_tools`/`timeout_tools`, and full call recording. Every adapter test module migrated; ~380 lines of duplicated boilerplate eliminated. `docs/TESTING_INFRASTRUCTURE.md` documents design, migration guide, and LOC metrics.
 - **Beta validation automation framework**: three Bash scripts (`scripts/validate-beta.sh`, `scripts/verify-environment.sh`, `scripts/collect-artifacts.sh`) that capture environment metadata, exercise every `bcs` CLI command with timing and exit-code recording, and archive reports into timestamped directories. Generates `reports/validation/report.md`, `inventory.json`, `inventory.yaml`, `doctor.txt`, `environment.json`, and `timings.json`. Designed for single-command CI pipeline integration. `docs/BETA_VALIDATION_AUTOMATION.md` documents workflow, artifacts, CI integration, and future extensions.
 

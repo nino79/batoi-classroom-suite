@@ -12,7 +12,7 @@ reused as HDO adapter callables indefinitely.
 
 For the full census — purpose, lines, callers, adapter equivalent, all 12 private helpers,
 and every module-level constant — see the companion file
-[docs/COLLECTOR_CENSUS.md](COLLECTOR_CENSUS.md) (generated from the architectural audit
+[docs/COLLECTOR_USAGE_CENSUS.md](COLLECTOR_USAGE_CENSUS.md) (generated from the architectural audit
 that produced this plan). This document covers only the removal strategy.
 
 ### 1.1 Migrate — Replace with HDO Adapter

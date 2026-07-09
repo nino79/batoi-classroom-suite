@@ -91,9 +91,9 @@ python3 -c "import bcs.platform.adapters.storage; print('Storage adapter:', bcs.
 **Key talking points:**
 - Platform Layer: `CommandRunner` abstraction over `subprocess`
 - 4 fully-implemented adapters (EFI, Storage, Secure Boot, Filesystem)
-- Network adapter implemented but not yet wired in
+- Network adapter fully implemented and wired into the composition root (Beta M3)
 - Host Discovery Orchestrator coordinates all adapters into one snapshot
-- No CLI command passes the orchestrator through yet — that's the next engineering step
+- `bcs inventory` passes the orchestrator through; `bcs doctor` reads adapters directly per ADR-0011
 
 ### 8. Stubs & Scope (2 min)
 
