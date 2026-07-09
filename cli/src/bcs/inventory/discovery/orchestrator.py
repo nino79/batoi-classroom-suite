@@ -96,7 +96,7 @@ class HostDiscoveryOrchestrator:
         storage_topology = _call_adapter("storage", self._adapters.storage, caveats)
         secure_boot = _call_adapter("secure_boot", self._adapters.secure_boot, caveats)
         filesystem = _call_adapter("filesystem", self._adapters.filesystem, caveats)
-        network_interfaces = _call_adapter("network", self._adapters.network, caveats)
+        network = _call_adapter("network", self._adapters.network, caveats)
         cpu = _call_adapter("cpu", self._adapters.cpu, caveats)
         memory = _call_adapter("memory", self._adapters.memory, caveats)
         tpm = _call_adapter("tpm", self._adapters.tpm, caveats)
@@ -106,7 +106,7 @@ class HostDiscoveryOrchestrator:
             storage_topology=storage_topology,
             secure_boot=secure_boot,
             filesystem=filesystem,
-            network=tuple(network_interfaces) if network_interfaces is not None else (),
+            network=network,
             cpu=cpu,
             memory=memory,
             tpm=tpm,

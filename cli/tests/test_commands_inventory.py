@@ -55,7 +55,7 @@ def _fake_inventory() -> HostInventory:
 @pytest.fixture
 def patched_inventory(monkeypatch: pytest.MonkeyPatch) -> HostInventory:
     fake = _fake_inventory()
-    monkeypatch.setattr(inventory_command, "collect_host_inventory", lambda: fake)
+    monkeypatch.setattr(inventory_command, "collect_host_inventory", lambda **_kwargs: fake)
     return fake
 
 
@@ -94,3 +94,34 @@ def test_run_inventory_yaml_output(make_runtime_context, patched_inventory) -> N
     payload = yaml.safe_load(runtime.console.file.getvalue())  # type: ignore[attr-defined]
     assert payload["schemaVersion"] == "bcs-inventory/v1alpha1"
     assert payload["cpu"]["logicalCores"] == 4
+
+
+# ---------------------------------------------------------------------------
+# Host Discovery integration
+# (docs/HOST_DISCOVERY_ORCHESTRATOR.md#relationship-to-host-inventory---implemented,
+# docs/ISSUE_70_IMPLEMENTATION_CHECKLIST.md § 3.4.7)
+# ---------------------------------------------------------------------------
+
+
+def test_run_inventory_passes_host_discovery_orchestrator_through(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``run_inventory()`` must forward ``runtime.host_discovery_orchestrator``
+    into ``collect_host_inventory()`` - the CLI-level half of issue #70's
+    fix. ``test_inventory_service.py`` proves ``collect_host_inventory()``
+    behaves correctly *given* an orchestrator; nothing there proves this
+    command actually supplies its own, rather than always passing
+    ``None`` (silently falling back to legacy-collector-only behaviour).
+    """
+    captured: dict[str, object] = {}
+
+    def _capturing_collect(**kwargs: object) -> HostInventory:
+        captured.update(kwargs)
+        return _fake_inventory()
+
+    monkeypatch.setattr(inventory_command, "collect_host_inventory", _capturing_collect)
+
+    runtime = make_runtime_context()
+    inventory_command.run_inventory(runtime)
+
+    assert captured["orchestrator"] is runtime.host_discovery_orchestrator

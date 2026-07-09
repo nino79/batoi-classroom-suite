@@ -132,7 +132,7 @@ def _print_text(runtime: RuntimeContext, inventory: HostInventory) -> None:
 
 def run_inventory(runtime: RuntimeContext) -> int:
     """Implement ``bcs inventory``. Returns the process exit code."""
-    inventory = collect_host_inventory()
+    inventory = collect_host_inventory(orchestrator=runtime.host_discovery_orchestrator)
 
     if runtime.output is OutputFormat.TEXT:
         _print_text(runtime, inventory)

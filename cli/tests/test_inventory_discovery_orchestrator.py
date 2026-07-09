@@ -16,10 +16,11 @@ import pytest
 
 from bcs.inventory.discovery.models import HostDiscoveryAdapters, HostDiscoverySnapshot
 from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
-from bcs.inventory.models import CpuInfo, MemoryInfo, NetworkInterface
+from bcs.inventory.models import CpuInfo, MemoryInfo
 from bcs.platform.adapters.efi.errors import FirmwareBootUnavailableError
 from bcs.platform.adapters.efi.models import FirmwareBootConfiguration
 from bcs.platform.adapters.filesystem.models import FilesystemUsageReport
+from bcs.platform.adapters.network.models import NetworkInterface, NetworkInterfaceStatus
 from bcs.platform.adapters.secureboot.models import SecureBootState, SecureBootStatus
 from bcs.platform.adapters.storage.errors import StorageUnavailableError
 from bcs.platform.adapters.storage.models import StorageConfiguration
@@ -68,8 +69,11 @@ def _make_memory_info() -> MemoryInfo:
     return MemoryInfo(total_bytes=1024)
 
 
-def _make_network_interfaces() -> list[NetworkInterface]:
-    return [NetworkInterface(name="eth0", is_up=True, is_loopback=False)]
+def _make_network_interface_status() -> NetworkInterfaceStatus:
+    return NetworkInterfaceStatus(
+        interfaces=(NetworkInterface(name="eth0", is_up=True, is_loopback=False),),
+        raw_text="eth0\n",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +90,7 @@ def test_no_adapters_configured_yields_empty_snapshot() -> None:
     assert snapshot.storage_topology is None
     assert snapshot.secure_boot is None
     assert snapshot.filesystem is None
-    assert snapshot.network == ()
+    assert snapshot.network is None
     assert snapshot.cpu is None
     assert snapshot.memory is None
     assert snapshot.tpm is None
@@ -127,7 +131,7 @@ def test_all_adapters_configured_snapshot_contents() -> None:
         storage=_CountingAdapter(_make_storage_configuration()),
         secure_boot=_CountingAdapter(_make_secure_boot_status()),
         filesystem=_CountingAdapter(_make_filesystem_usage_report()),
-        network=_CountingAdapter(_make_network_interfaces()),
+        network=_CountingAdapter(_make_network_interface_status()),
         cpu=_CountingAdapter(_make_cpu_info()),
         memory=_CountingAdapter(_make_memory_info()),
         tpm=_CountingAdapter(123),
@@ -138,19 +142,11 @@ def test_all_adapters_configured_snapshot_contents() -> None:
     assert snapshot.storage_topology == _make_storage_configuration()
     assert snapshot.secure_boot == _make_secure_boot_status()
     assert snapshot.filesystem == _make_filesystem_usage_report()
-    assert snapshot.network == tuple(_make_network_interfaces())
+    assert snapshot.network == _make_network_interface_status()
     assert snapshot.cpu == _make_cpu_info()
     assert snapshot.memory == _make_memory_info()
     assert snapshot.tpm == 123
     assert snapshot.caveats == ()
-
-
-def test_network_adapter_result_is_converted_from_list_to_tuple() -> None:
-    network = _CountingAdapter(_make_network_interfaces())
-    snapshot = HostDiscoveryOrchestrator(HostDiscoveryAdapters(network=network)).discover()
-
-    assert isinstance(snapshot.network, tuple)
-    assert snapshot.network == tuple(_make_network_interfaces())
 
 
 # ---------------------------------------------------------------------------
@@ -213,11 +209,13 @@ def test_a_none_slot_never_produces_a_caveat() -> None:
     assert snapshot.caveats == ()
 
 
-def test_network_failure_leaves_network_as_empty_tuple_not_none() -> None:
-    network = _CountingAdapter([], error=PlatformError("network probe failed"))
+def test_network_failure_leaves_network_as_none() -> None:
+    network = _CountingAdapter(
+        _make_network_interface_status(), error=PlatformError("network probe failed")
+    )
     snapshot = HostDiscoveryOrchestrator(HostDiscoveryAdapters(network=network)).discover()
 
-    assert snapshot.network == ()
+    assert snapshot.network is None
     assert snapshot.caveats == ("network: PlatformError: network probe failed",)
 
 
@@ -288,9 +286,9 @@ def test_execution_order_matches_declared_field_order() -> None:
         calls.append("filesystem")
         return _make_filesystem_usage_report()
 
-    def _network() -> list[NetworkInterface]:
+    def _network() -> NetworkInterfaceStatus:
         calls.append("network")
-        return []
+        return NetworkInterfaceStatus(raw_text="")
 
     def _cpu() -> CpuInfo:
         calls.append("cpu")
@@ -334,7 +332,7 @@ def test_every_configured_adapter_is_called_exactly_once() -> None:
         "storage": _CountingAdapter(_make_storage_configuration()),
         "secure_boot": _CountingAdapter(_make_secure_boot_status()),
         "filesystem": _CountingAdapter(_make_filesystem_usage_report()),
-        "network": _CountingAdapter(_make_network_interfaces()),
+        "network": _CountingAdapter(_make_network_interface_status()),
         "cpu": _CountingAdapter(_make_cpu_info()),
         "memory": _CountingAdapter(_make_memory_info()),
         "tpm": _CountingAdapter(None),

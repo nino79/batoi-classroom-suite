@@ -38,6 +38,8 @@ from bcs.inventory.discovery.orchestrator import HostDiscoveryOrchestrator
 from bcs.platform.adapters.efi.adapter import read_firmware_boot_configuration
 from bcs.platform.adapters.efi.models import FirmwareBootConfiguration
 from bcs.platform.adapters.filesystem.adapter import read_filesystem_usage
+from bcs.platform.adapters.network.adapter import read_network_interfaces
+from bcs.platform.adapters.network.models import NetworkInterfaceStatus
 from bcs.platform.adapters.secureboot.adapter import read_secure_boot_status
 from bcs.platform.adapters.secureboot.models import SecureBootState, SecureBootStatus
 from bcs.platform.adapters.storage.adapter import read_storage_topology
@@ -154,6 +156,14 @@ _VALID_MOKUTIL = "SecureBoot enabled\nSetupMode disabled\n"
 # '-' inode fields mirror real df behaviour for vfat (no fixed inode
 # allocation) - see docs/FILESYSTEM_ADAPTER.md#parser-architecture.
 _VALID_DF = "/dev/nvme0n1p1 vfat - - - 524288000 104857600 419430400 /boot/efi\n"
+_VALID_IP = (
+    '[{"ifname": "lo", "flags": ["LOOPBACK", "UP", "LOWER_UP"], '
+    '"address": "00:00:00:00:00:00", '
+    '"addr_info": [{"family": "inet", "local": "127.0.0.1"}]}, '
+    '{"ifname": "eth0", "flags": ["BROADCAST", "MULTICAST", "UP", "LOWER_UP"], '
+    '"address": "52:54:00:12:34:56", '
+    '"addr_info": [{"family": "inet", "local": "192.0.2.10"}]}]'
+)
 
 
 def _make_result(*, stdout: str = "", stderr: str = "", exit_code: int = 0) -> FakeCommandResult:
@@ -178,22 +188,24 @@ def _fully_successful_runner() -> FakeCommandRunner:
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
             "mokutil": _make_result(stdout=_VALID_MOKUTIL),
             "df": _make_result(stdout=_VALID_DF),
+            "ip": _make_result(stdout=_VALID_IP),
         }
     )
 
 
 def _build_adapters(runner: FakeCommandRunner) -> HostDiscoveryAdapters:
-    """Bind the three real, implemented adapters to ``runner`` exactly
-    the way ``bcs.app.main()``'s composition root does - same
+    """Bind the real, implemented adapters to ``runner`` exactly the way
+    ``bcs.app.main()``'s composition root does - same
     ``functools.partial`` shape, same shared runner instance, same
-    direct references for the already-zero-argument collectors.
+    direct references for the already-zero-argument collectors
+    (``cpu``/``memory``, the only two domains with no adapter).
     """
     return HostDiscoveryAdapters(
         efi=functools.partial(read_firmware_boot_configuration, runner=runner),
         storage=functools.partial(read_storage_topology, runner=runner),
         secure_boot=functools.partial(read_secure_boot_status, runner=runner),
         filesystem=functools.partial(read_filesystem_usage, runner=runner),
-        network=collectors.collect_network,
+        network=functools.partial(read_network_interfaces, runner=runner),
         cpu=collectors.collect_cpu,
         memory=collectors.collect_memory,
     )
@@ -217,11 +229,13 @@ def test_full_pipeline_success_populates_every_wired_domain_exactly_once() -> No
     assert isinstance(snapshot.secure_boot, SecureBootStatus)
     assert snapshot.secure_boot.state == SecureBootState.ENABLED
     assert snapshot.secure_boot.setup_mode is False
-    # network/cpu/memory come from the real, unfaked collectors - stdlib-only,
+    # cpu/memory come from the real, unfaked collectors - stdlib-only,
     # degrade gracefully cross-platform, never raise.
     assert snapshot.cpu is not None
     assert snapshot.memory is not None
-    assert isinstance(snapshot.network, tuple)
+    assert isinstance(snapshot.network, NetworkInterfaceStatus)
+    assert [iface.name for iface in snapshot.network.interfaces] == ["lo", "eth0"]
+    assert snapshot.network.interfaces[1].ip_addresses == ("192.0.2.10",)
     # tpm: genuinely unset slot, not a failure.
     assert snapshot.tpm is None
     assert snapshot.caveats == ()
@@ -229,19 +243,27 @@ def test_full_pipeline_success_populates_every_wired_domain_exactly_once() -> No
     # Every tool-based adapter invoked exactly once - one CommandRunner.run()
     # call per tool, no retries, no duplicate invocation.
     tools_called = [call["command"][0] for call in runner.calls]
-    assert sorted(tools_called) == ["blkid", "df", "efibootmgr", "findmnt", "lsblk", "mokutil"]
-    assert len(tools_called) == len(set(tools_called)) == 6
+    assert sorted(tools_called) == [
+        "blkid",
+        "df",
+        "efibootmgr",
+        "findmnt",
+        "ip",
+        "lsblk",
+        "mokutil",
+    ]
+    assert len(tools_called) == len(set(tools_called)) == 7
 
 
 def test_full_pipeline_calls_share_the_locale_forced_environment() -> None:
     """Every tool-based adapter forces LANG=C/LC_ALL=C independently -
     proving the shared runner sees a consistently-built environment from
-    all three adapters, not just one.
+    all adapters, not just one.
     """
     runner = _fully_successful_runner()
     HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
 
-    assert len(runner.calls) == 6
+    assert len(runner.calls) == 7
     for call in runner.calls:
         assert call["env"]["LANG"] == "C"
         assert call["env"]["LC_ALL"] == "C"
@@ -266,6 +288,7 @@ def test_one_adapter_failing_isolates_into_one_caveat_others_unaffected() -> Non
             "blkid": _make_result(stdout=_VALID_BLKID),
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
             "df": _make_result(stdout=_VALID_DF),
+            "ip": _make_result(stdout=_VALID_IP),
         },
         not_found_tools=frozenset({"mokutil"}),
     )
@@ -275,6 +298,7 @@ def test_one_adapter_failing_isolates_into_one_caveat_others_unaffected() -> Non
     assert snapshot.storage_topology is not None
     assert snapshot.secure_boot is None
     assert snapshot.filesystem is not None
+    assert snapshot.network is not None
     assert snapshot.cpu is not None
     assert snapshot.memory is not None
 
@@ -297,6 +321,7 @@ def test_unavailable_stderr_produces_the_domain_specific_exception_in_the_caveat
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
             "mokutil": _make_result(stderr="Permission denied", exit_code=1),
             "df": _make_result(stdout=_VALID_DF),
+            "ip": _make_result(stdout=_VALID_IP),
         },
     )
     snapshot = HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
@@ -320,6 +345,7 @@ def test_filesystem_failure_isolates_into_its_own_caveat() -> None:
             "blkid": _make_result(stdout=_VALID_BLKID),
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
             "mokutil": _make_result(stdout=_VALID_MOKUTIL),
+            "ip": _make_result(stdout=_VALID_IP),
         },
         not_found_tools=frozenset({"df"}),
     )
@@ -356,6 +382,7 @@ def test_filesystem_partial_failure_is_not_a_caveat_but_raw_stderr_carries_it() 
                 stderr="df: '/mnt/stale': Stale file handle",
                 exit_code=1,
             ),
+            "ip": _make_result(stdout=_VALID_IP),
         },
     )
     snapshot = HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
@@ -378,6 +405,7 @@ def test_multiple_independent_failures_each_get_their_own_caveat_in_order() -> N
             "blkid": _make_result(stdout=_VALID_BLKID),
             "findmnt": _make_result(stdout=_VALID_FINDMNT),
             "df": _make_result(stdout=_VALID_DF),
+            "ip": _make_result(stdout=_VALID_IP),
         },
         not_found_tools=frozenset({"efibootmgr", "mokutil"}),
     )
@@ -392,7 +420,15 @@ def test_multiple_independent_failures_each_get_their_own_caveat_in_order() -> N
     assert snapshot.caveats[1].startswith("secure_boot: CommandNotFoundError:")
 
     tools_called = [call["command"][0] for call in runner.calls]
-    assert sorted(tools_called) == ["blkid", "df", "efibootmgr", "findmnt", "lsblk", "mokutil"]
+    assert sorted(tools_called) == [
+        "blkid",
+        "df",
+        "efibootmgr",
+        "findmnt",
+        "ip",
+        "lsblk",
+        "mokutil",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -437,11 +473,20 @@ def test_pipeline_built_by_the_real_composition_root_works_end_to_end(
     assert isinstance(snapshot.secure_boot, SecureBootStatus)
     assert snapshot.secure_boot.state == SecureBootState.ENABLED
     assert snapshot.filesystem is not None
+    assert isinstance(snapshot.network, NetworkInterfaceStatus)
     assert snapshot.caveats == ()
 
     tools_called = [call["command"][0] for call in fake_command_runner.calls]
-    assert sorted(tools_called) == ["blkid", "df", "efibootmgr", "findmnt", "lsblk", "mokutil"]
-    assert len(tools_called) == len(set(tools_called)) == 6
+    assert sorted(tools_called) == [
+        "blkid",
+        "df",
+        "efibootmgr",
+        "findmnt",
+        "ip",
+        "lsblk",
+        "mokutil",
+    ]
+    assert len(tools_called) == len(set(tools_called)) == 7
 
 
 def test_discover_called_twice_re_invokes_every_real_adapter_a_second_time() -> None:
@@ -456,7 +501,8 @@ def test_discover_called_twice_re_invokes_every_real_adapter_a_second_time() -> 
     orchestrator.discover()
 
     tools_called = [call["command"][0] for call in runner.calls]
-    assert len(tools_called) == 12
+    assert len(tools_called) == 14
     assert tools_called.count("mokutil") == 2
     assert tools_called.count("efibootmgr") == 2
     assert tools_called.count("df") == 2
+    assert tools_called.count("ip") == 2
