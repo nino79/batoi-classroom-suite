@@ -6,31 +6,35 @@ another and of whether a ClassroomConfig resolves at all - only the
 is a ``warn``, not a hard failure, since ``doctor`` is meant to be
 useful before a classroom has been configured yet.
 
-``firmware``, ``esp``, ``storage``, ``usb-storage``, ``network``, and
-``tooling`` are pass/fail *evaluations* of facts collected by the Host
-Inventory subsystem (:mod:`bcs.inventory`) - they no longer probe the
-host directly, so ``bcs doctor`` and ``bcs inventory`` can never
-disagree about what the machine actually looks like for those checks.
-``permissions`` (a fact about the current *process*, not the host) and
-``config`` (a ClassroomConfig concern) are doctor-specific and stay
-outside the inventory subsystem's scope.
+``firmware``, ``esp``, ``usb-storage``, and ``tooling`` are pass/fail
+*evaluations* of facts collected by the Host Inventory subsystem
+(:mod:`bcs.inventory`) - they no longer probe the host directly, so
+``bcs doctor`` and ``bcs inventory`` can never disagree about what the
+machine actually looks like for those checks. ``permissions`` (a fact
+about the current *process*, not the host) and ``config`` (a
+ClassroomConfig concern) are doctor-specific and stay outside the
+inventory subsystem's scope.
 
-``secure-boot`` (Beta M4) is the one exception: it calls the Secure
-Boot Platform Adapter directly, via ``runtime.command_runner``, rather
-than the Host Inventory subsystem - deliberately, per ADR-0011's own
-"Alternatives Considered" rejecting a full
-``HostDiscoveryOrchestrator.discover()`` sweep for ``bcs doctor`` (see
-:func:`_check_secure_boot`'s own docstring). ``collect_firmware()`` is
-still used for the cheap UEFI-presence gate only, matching
-``_check_firmware()``'s own mechanism.
+``secure-boot`` (Beta M4), ``storage``, and ``network`` (both
+completing the Host Discovery Orchestrator integration) are the
+exceptions: each calls its own Platform Adapter directly, via
+``runtime.command_runner``, rather than the Host Inventory subsystem -
+deliberately, per ADR-0011's own "Alternatives Considered" rejecting a
+full ``HostDiscoveryOrchestrator.discover()`` sweep for ``bcs doctor``
+(see :func:`_check_secure_boot`'s own docstring, which the other two
+mirror). Each falls back to its legacy collector on any
+``PlatformError``, so ``bcs doctor`` never crashes because a tool is
+missing; ``collect_firmware()`` is still used for the cheap
+UEFI-presence gate only, matching ``_check_firmware()``'s own
+mechanism.
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 
 from bcs.config.validator import validate_document
 from bcs.context import RuntimeContext
@@ -44,11 +48,38 @@ from bcs.inventory.collectors import (
     collect_usb_storage,
 )
 from bcs.output import OutputFormat, print_structured_result
+from bcs.platform.adapters.network.adapter import read_network_interfaces
 from bcs.platform.adapters.secureboot.adapter import read_secure_boot_status
 from bcs.platform.adapters.secureboot.models import SecureBootState as PlatformSecureBootState
+from bcs.platform.adapters.storage.adapter import read_storage_topology
 from bcs.platform.errors import PlatformError
 
 CheckStatus = Literal["ok", "warn", "fail", "skip"]
+
+
+class _NetworkInterfaceLike(Protocol):
+    """The subset of fields ``_check_network()`` needs, satisfied
+    structurally by both ``bcs.inventory.models.NetworkInterface`` (the
+    legacy collector's fallback shape) and
+    ``bcs.platform.adapters.network.models.NetworkInterface`` (the
+    adapter's own, independently-defined model, per
+    ``docs/NETWORK_ADAPTER.md#naming-rationale``) - avoiding a forced
+    translation between the two just to satisfy this one check.
+
+    Declared as read-only properties, not plain attributes: both
+    concrete models are frozen Pydantic models exposing read-only
+    fields, and a plain-attribute ``Protocol`` member requires a
+    *settable* attribute to match structurally under ``mypy --strict``.
+    """
+
+    @property
+    def name(self) -> str: ...  # pragma: no cover - a Protocol stub body, never meant to run
+    @property
+    def is_up(self) -> bool: ...  # pragma: no cover - a Protocol stub body, never meant to run
+    @property
+    def is_loopback(
+        self,
+    ) -> bool: ...  # pragma: no cover - a Protocol stub body, never meant to run
 
 
 @dataclass(frozen=True)
@@ -102,12 +133,33 @@ def _check_secure_boot(runtime: RuntimeContext) -> CheckResult:
     )
 
 
-def _check_storage() -> CheckResult:
-    devices = collect_storage()
-    if devices:
-        names = ", ".join(device.name for device in devices)
-        return CheckResult("storage", "ok", f"NVMe device(s) found: {names}")
-    return CheckResult("storage", "fail", "no NVMe device found (PLAT-005)")
+def _check_storage(runtime: RuntimeContext) -> CheckResult:
+    """Evaluate storage device presence via a direct call to the Storage
+    Platform Adapter, sharing ``runtime.command_runner`` - mirroring
+    ``_check_secure_boot()``'s own direct-adapter-call pattern, never
+    ``orchestrator.discover()`` (ADR-0011 § Alternatives Considered).
+
+    Unlike Secure Boot, the legacy ``collect_storage()`` collector
+    produces real, useful (if NVMe-only) data rather than a permanent
+    placeholder, so a ``PlatformError`` (e.g. ``lsblk`` missing) falls
+    back to that collector's own device list wholesale, exactly
+    preserving this check's pre-existing behaviour, rather than only a
+    warning. When the adapter succeeds, only whole-disk devices
+    (``device_type == "disk"``) are counted - matching
+    ``bcs.inventory.service._translate_storage_devices()``'s own
+    scope - so this check never disagrees with ``bcs inventory`` about
+    which devices count as storage.
+    """
+    try:
+        topology = read_storage_topology(runtime.command_runner)
+    except PlatformError:
+        names = [device.name for device in collect_storage()]
+    else:
+        names = [device.name for device in topology.devices if device.device_type == "disk"]
+
+    if names:
+        return CheckResult("storage", "ok", f"storage device(s) found: {', '.join(names)}")
+    return CheckResult("storage", "fail", "no storage device found (PLAT-005)")
 
 
 def _check_esp() -> CheckResult:
@@ -127,8 +179,26 @@ def _check_usb_storage() -> CheckResult:
     return CheckResult("usb-storage", "ok", f"USB storage device(s) found: {names}")
 
 
-def _check_network() -> CheckResult:
-    interfaces = [iface for iface in collect_network() if not iface.is_loopback]
+def _check_network(runtime: RuntimeContext) -> CheckResult:
+    """Evaluate network interface state via a direct call to the Network
+    Platform Adapter, sharing ``runtime.command_runner`` - mirroring
+    ``_check_secure_boot()``'s/``_check_storage()``'s own direct-adapter-
+    call pattern, never ``orchestrator.discover()`` (ADR-0011 §
+    Alternatives Considered).
+
+    Falls back to the legacy ``collect_network()`` collector's own
+    interface list on any ``PlatformError`` (e.g. ``ip`` missing),
+    exactly preserving this check's pre-existing behaviour.
+    """
+    all_interfaces: Sequence[_NetworkInterfaceLike]
+    try:
+        status = read_network_interfaces(runtime.command_runner)
+    except PlatformError:
+        all_interfaces = collect_network()
+    else:
+        all_interfaces = status.interfaces
+
+    interfaces = [iface for iface in all_interfaces if not iface.is_loopback]
     if not interfaces:
         return CheckResult("network", "skip", "no non-loopback network interfaces detected")
     up = [iface for iface in interfaces if iface.is_up]
@@ -182,9 +252,9 @@ _ALL_CHECKS: dict[str, Callable[[RuntimeContext], CheckResult]] = {
     "firmware": lambda _runtime: _check_firmware(),
     "secure-boot": _check_secure_boot,
     "esp": lambda _runtime: _check_esp(),
-    "storage": lambda _runtime: _check_storage(),
+    "storage": _check_storage,
     "usb-storage": lambda _runtime: _check_usb_storage(),
-    "network": lambda _runtime: _check_network(),
+    "network": _check_network,
     "tooling": lambda _runtime: _check_tooling(),
     "permissions": lambda _runtime: _check_permissions(),
     "config": _check_config,

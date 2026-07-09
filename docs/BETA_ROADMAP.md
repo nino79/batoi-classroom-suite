@@ -100,7 +100,7 @@ This is the single highest-impact engineering item in Beta. The wiring exists (`
 
 **Exit criteria:**
 - [x] `bcs inventory` shows IP addresses in network section (code-complete and test-verified; real-hardware confirmation on E01/E02/E03/E06 remains part of M5).
-- [ ] `bcs doctor --check network` uses `ip` tool data — **out of scope for M3/M4**; `_check_network()` still calls `collect_network()` directly (the full M2b doctor-wiring scope, not attempted here).
+- [x] `bcs doctor --check network` uses `ip` tool data (Host Discovery Orchestrator completion pass, after M4) — via a direct `read_network_interfaces(runtime.command_runner)` call, not the full M2b doctor-wiring scope (`orchestrator.discover()` was never attempted, per ADR-0011 § Alternatives Considered); falls back to `collect_network()` on any `PlatformError`.
 - [ ] Network parts in `cli/tests/fixtures/network/` populated with real captures — still zero-byte placeholders (M6).
 - [x] `KNOWN_LIMITATIONS.md` "Network Adapter Implemented but Not Wired" entry updated to reflect completion (folded into the broader "Host Discovery Orchestrator Not Consumed by Most of `bcs doctor`" entry, Beta M4).
 
@@ -219,7 +219,7 @@ M2a depends on nothing but a small code change.
 M2b depends on M2a (the orchestrator must be passed through first).
 M2c is conceptually independent of M2b but affects the same model.
 M3 is independent of M2 (parallel track).
-M4 was originally estimated to interact with M2b (doctor wiring) — in practice it did not: `bcs doctor`'s Secure Boot check was fixed with a small, self-contained direct adapter call (`read_secure_boot_status(runtime.command_runner)`), never `HostDiscoveryOrchestrator.discover()`, so M4 shipped without waiting on M2b's own, still-not-started, broader scope (`network`/`storage`/`esp` checks, `caveats` surfacing). See `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`.
+M4 was originally estimated to interact with M2b (doctor wiring) — in practice it did not: `bcs doctor`'s Secure Boot check was fixed with a small, self-contained direct adapter call (`read_secure_boot_status(runtime.command_runner)`), never `HostDiscoveryOrchestrator.discover()`. The same direct-call shape was then reused for `bcs doctor`'s `storage`/`network` checks (a follow-up Host Discovery Orchestrator completion pass), so all three shipped without waiting on M2b's own, still-not-started, narrower remaining scope (`esp`/`usb-storage` checks, `caveats` surfacing). See `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`.
 M5 depends on M1, M2a, M4 being stable.
 M6 is independent (parallel track throughout).
 M7 depends on everything above.
@@ -272,7 +272,7 @@ Beta is complete when **all** of the following hold:
 
 - [ ] **M1 complete.** Storage array is non-empty on E01. Baseline validation pass logged.
 - [x] **M2a complete (code).** `bcs inventory` consumes the Host Discovery Orchestrator. Real-hardware confirmation is part of M5.
-- [ ] **M2b complete.** `bcs doctor` consumes the orchestrator for `network`/`storage`/`esp` and surfaces `caveats`. (Its Secure Boot check is fixed separately, per M4 below, via a direct adapter call rather than the orchestrator — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`.)
+- [ ] **M2b complete.** `bcs doctor` surfaces `caveats`, and its `esp`/`usb-storage` checks gain an adapter-derived equivalent (new interpretive business logic, not yet designed). (Its Secure Boot, Storage, and Network checks are already fixed, per M4 and the Host Discovery Orchestrator completion pass below, each via a direct adapter call rather than the orchestrator — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`.)
 - [ ] **M2c accepted.** ADR-0008 amendment for Discovery-domain schema folding is either accepted with implementation underway, or explicitly deferred to Phase 1 with documented reasoning.
 - [x] **M3 complete (code).** Network Adapter is wired. IP addresses appear in inventory output. Real-hardware confirmation is part of M5; `bcs doctor --check network` and real fixture captures remain out of scope (M2b/M6 respectively).
 - [x] **M4 complete (code).** `bcs inventory` and `bcs doctor` both report real Secure Boot state. Real-hardware confirmation is part of M5.

@@ -17,13 +17,37 @@ from bcs.inventory.models import (
     UsbStorageDevice,
 )
 from bcs.output import OutputFormat
+from bcs.platform.adapters.network.errors import NetworkUnavailableError
+from bcs.platform.adapters.network.models import (
+    NetworkInterface as PlatformNetworkInterface,
+)
+from bcs.platform.adapters.network.models import NetworkInterfaceStatus
 from bcs.platform.adapters.secureboot.errors import (
     SecureBootParseError,
     SecureBootUnavailableError,
 )
 from bcs.platform.adapters.secureboot.models import SecureBootState as PlatformSecureBootState
 from bcs.platform.adapters.secureboot.models import SecureBootStatus
+from bcs.platform.adapters.storage.errors import StorageUnavailableError
+from bcs.platform.adapters.storage.models import BlockDevice, StorageConfiguration
 from bcs.platform.errors import CommandNotFoundError
+
+
+def _make_block_device(**overrides: object) -> BlockDevice:
+    """Build a minimal, valid ``BlockDevice`` for storage-adapter-path
+    tests, mirroring ``test_inventory_service.py``'s own helper.
+    """
+    defaults: dict[str, object] = {
+        "name": "sda",
+        "path": "/dev/sda",
+        "deviceType": "disk",
+        "isRemovable": False,
+        "isReadOnly": False,
+        "isNvme": False,
+    }
+    defaults.update(overrides)
+    return BlockDevice(**defaults)  # type: ignore[arg-type]
+
 
 # ---------------------------------------------------------------------------
 # Individual check-evaluation logic, exercised directly against a
@@ -229,21 +253,129 @@ def test_check_secure_boot_uses_runtime_command_runner(
     assert captured["runner"] is runtime.command_runner
 
 
-def test_check_storage_ok_when_nvme_present(monkeypatch: pytest.MonkeyPatch) -> None:
+# ---------------------------------------------------------------------------
+# _check_storage (Host Discovery Orchestrator completion) - a direct call to
+# the Storage Platform Adapter via runtime.command_runner, never
+# HostDiscoveryOrchestrator.discover() (ADR-0011), mirroring
+# _check_secure_boot's own pattern. Falls back to collect_storage() (unlike
+# Secure Boot) since the legacy collector produces real, useful data.
+# ---------------------------------------------------------------------------
+
+
+def test_check_storage_ok_when_adapter_reports_disk(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # If this were called, the test would see the collector-sourced NVMe
+    # device below instead of the adapter-sourced SATA device - proving
+    # it was *not*.
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_storage",
+        lambda: [StorageDevice(name="collector-should-not-run", path="/dev/nvme9n9", isNvme=True)],
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "read_storage_topology",
+        lambda _runner: StorageConfiguration(devices=(_make_block_device(name="sda"),)),
+    )
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_storage(runtime)
+    assert result.status == "ok"
+    assert "sda" in result.message
+
+
+def test_check_storage_filters_out_non_disk_devices(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Matches ``bcs.inventory.service._translate_storage_devices()``'s
+    own scope - a loop/rom device must not make this check pass, so
+    ``bcs doctor`` never disagrees with ``bcs inventory`` about which
+    devices count as storage.
+    """
+    monkeypatch.setattr(doctor_module, "collect_storage", list)
+    monkeypatch.setattr(
+        doctor_module,
+        "read_storage_topology",
+        lambda _runner: StorageConfiguration(
+            devices=(_make_block_device(name="loop0", deviceType="loop"),)
+        ),
+    )
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_storage(runtime)
+    assert result.status == "fail"
+
+
+def test_check_storage_falls_back_to_collector_when_adapter_unavailable(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         doctor_module,
         "collect_storage",
         lambda: [StorageDevice(name="nvme0n1", path="/dev/nvme0n1", isNvme=True)],
     )
-    result = doctor_module._check_storage()
+
+    def _raise_not_found(runner: object) -> StorageConfiguration:
+        raise CommandNotFoundError("lsblk not found", executable="lsblk")
+
+    monkeypatch.setattr(doctor_module, "read_storage_topology", _raise_not_found)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_storage(runtime)
     assert result.status == "ok"
     assert "nvme0n1" in result.message
 
 
-def test_check_storage_fail_when_none_present(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_storage_falls_back_when_adapter_unavailable_error(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_storage",
+        lambda: [StorageDevice(name="nvme0n1", path="/dev/nvme0n1", isNvme=True)],
+    )
+
+    def _raise_unavailable(runner: object) -> StorageConfiguration:
+        raise StorageUnavailableError("lsblk could not provide storage data in this environment.")
+
+    monkeypatch.setattr(doctor_module, "read_storage_topology", _raise_unavailable)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_storage(runtime)
+    assert result.status == "ok"
+    assert "nvme0n1" in result.message
+
+
+def test_check_storage_fail_when_none_present(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(doctor_module, "collect_storage", list)
-    result = doctor_module._check_storage()
+
+    def _raise_not_found(runner: object) -> StorageConfiguration:
+        raise CommandNotFoundError("lsblk not found", executable="lsblk")
+
+    monkeypatch.setattr(doctor_module, "read_storage_topology", _raise_not_found)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_storage(runtime)
     assert result.status == "fail"
+
+
+def test_check_storage_uses_runtime_command_runner(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _capturing(runner: object) -> StorageConfiguration:
+        captured["runner"] = runner
+        return StorageConfiguration()
+
+    monkeypatch.setattr(doctor_module, "read_storage_topology", _capturing)
+
+    runtime = make_runtime_context()
+    doctor_module._check_storage(runtime)
+    assert captured["runner"] is runtime.command_runner
 
 
 def test_check_esp_fail_when_not_present(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -294,36 +426,136 @@ def test_check_usb_storage_ok_when_present(monkeypatch: pytest.MonkeyPatch) -> N
     assert "sdb" in result.message
 
 
-def test_check_network_skip_when_only_loopback(monkeypatch: pytest.MonkeyPatch) -> None:
+# ---------------------------------------------------------------------------
+# _check_network (Host Discovery Orchestrator completion) - a direct call to
+# the Network Platform Adapter via runtime.command_runner, never
+# HostDiscoveryOrchestrator.discover() (ADR-0011), mirroring
+# _check_secure_boot's/_check_storage's own pattern. Falls back to
+# collect_network() on any PlatformError.
+# ---------------------------------------------------------------------------
+
+
+def _make_network_interface_status(
+    *, interfaces: tuple[PlatformNetworkInterface, ...]
+) -> NetworkInterfaceStatus:
+    return NetworkInterfaceStatus(interfaces=interfaces, rawText="")
+
+
+def test_check_network_skip_when_only_loopback(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(doctor_module, "collect_network", list)
     monkeypatch.setattr(
         doctor_module,
-        "collect_network",
-        lambda: [NetworkInterface(name="lo", isUp=True, isLoopback=True)],
+        "read_network_interfaces",
+        lambda _runner: _make_network_interface_status(
+            interfaces=(PlatformNetworkInterface(name="lo", isUp=True, isLoopback=True),)
+        ),
     )
-    result = doctor_module._check_network()
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_network(runtime)
     assert result.status == "skip"
 
 
-def test_check_network_ok_when_interface_up(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_network_ok_when_adapter_reports_interface_up(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # If this were called, the test would see the collector-sourced
+    # interface below instead of the adapter-sourced one - proving it
+    # was *not*.
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_network",
+        lambda: [NetworkInterface(name="collector-should-not-run", isUp=True, isLoopback=False)],
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "read_network_interfaces",
+        lambda _runner: _make_network_interface_status(
+            interfaces=(PlatformNetworkInterface(name="eth0", isUp=True, isLoopback=False),)
+        ),
+    )
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_network(runtime)
+    assert result.status == "ok"
+    assert "eth0" in result.message
+
+
+def test_check_network_warn_when_interface_present_but_down(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(doctor_module, "collect_network", list)
+    monkeypatch.setattr(
+        doctor_module,
+        "read_network_interfaces",
+        lambda _runner: _make_network_interface_status(
+            interfaces=(PlatformNetworkInterface(name="eth0", isUp=False, isLoopback=False),)
+        ),
+    )
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_network(runtime)
+    assert result.status == "warn"
+
+
+def test_check_network_falls_back_to_collector_when_adapter_unavailable(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         doctor_module,
         "collect_network",
         lambda: [NetworkInterface(name="eth0", isUp=True, isLoopback=False)],
     )
-    result = doctor_module._check_network()
+
+    def _raise_not_found(runner: object) -> NetworkInterfaceStatus:
+        raise CommandNotFoundError("ip not found", executable="ip")
+
+    monkeypatch.setattr(doctor_module, "read_network_interfaces", _raise_not_found)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_network(runtime)
     assert result.status == "ok"
+    assert "eth0" in result.message
 
 
-def test_check_network_warn_when_interface_present_but_down(
-    monkeypatch: pytest.MonkeyPatch,
+def test_check_network_falls_back_when_adapter_unavailable_error(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         doctor_module,
         "collect_network",
-        lambda: [NetworkInterface(name="eth0", isUp=False, isLoopback=False)],
+        lambda: [NetworkInterface(name="eth0", isUp=True, isLoopback=False)],
     )
-    result = doctor_module._check_network()
-    assert result.status == "warn"
+
+    def _raise_unavailable(runner: object) -> NetworkInterfaceStatus:
+        raise NetworkUnavailableError(
+            "Network interface data is not available in this environment."
+        )
+
+    monkeypatch.setattr(doctor_module, "read_network_interfaces", _raise_unavailable)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_network(runtime)
+    assert result.status == "ok"
+    assert "eth0" in result.message
+
+
+def test_check_network_uses_runtime_command_runner(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _capturing(runner: object) -> NetworkInterfaceStatus:
+        captured["runner"] = runner
+        return _make_network_interface_status(interfaces=())
+
+    monkeypatch.setattr(doctor_module, "read_network_interfaces", _capturing)
+
+    runtime = make_runtime_context()
+    doctor_module._check_network(runtime)
+    assert captured["runner"] is runtime.command_runner
 
 
 def test_check_tooling_ok_when_all_found(monkeypatch: pytest.MonkeyPatch) -> None:
