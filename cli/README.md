@@ -11,12 +11,24 @@ This implementation phase covers **only the CLI framework**: global options, log
 
 ## Development Setup
 
+On a clean Ubuntu 24.04 machine, the `venv` module is a separate package —
+without it, `python3.12 -m venv` fails with `ensurepip is not available`:
+
+```bash
+sudo apt update && sudo apt install -y python3.12-venv git
+```
+
+Then, from a clone of this repository:
+
 ```bash
 cd cli
 python3.12 -m venv .venv
 source .venv/bin/activate  # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
 ```
+
+Never `pip install` outside a venv on Ubuntu 24.04 — the system Python is
+externally managed (PEP 668) and will refuse the install.
 
 ## Running
 
