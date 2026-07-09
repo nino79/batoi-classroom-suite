@@ -11,6 +11,7 @@ Maintainer, CI helper, and Beta validation scripts (repository housekeeping — 
 | `collect-artifacts.sh` | Archive all validation reports into a timestamped directory. |
 | `hardware-validation/` | Reusable hardware capture, comparison, and summary scripts — see [toolkit docs](../docs/HARDWARE_VALIDATION_TOOLKIT.md). |
 | `release/` | Beta release engineering scripts — build, verify, install, release notes — see [release engineering docs](../docs/RELEASE_ENGINEERING.md). |
+| `dashboard/` | Beta Diagnostics Dashboard — aggregate validation, hardware, packaging, and release results into a single report — see [dashboard docs](../docs/BETA_DASHBOARD.md). |
 
 See [`docs/BETA_VALIDATION_AUTOMATION.md`](../docs/BETA_VALIDATION_AUTOMATION.md) for the Beta validation automation design, workflow, and CI integration guide.
 See [`docs/HARDWARE_VALIDATION_TOOLKIT.md`](../docs/HARDWARE_VALIDATION_TOOLKIT.md) for the hardware validation toolkit reference.
