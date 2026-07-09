@@ -93,7 +93,16 @@ def _read_secure_boot_state() -> SecureBootState:
 
 
 def collect_storage() -> list[StorageDevice]:
-    """Enumerate NVMe block devices - see ``PLAT-005``."""
+    """Enumerate NVMe block devices - see ``PLAT-005``.
+
+    .. deprecated::
+       Legacy fallback. The Storage Adapter
+       (``bcs.platform.adapters.storage.adapter.read_storage_topology``) is
+       the primary source via ``HostDiscoverySnapshot.storage_topology``.
+       This collector remains as a fallback when the adapter slot is unset
+       or fails, and for direct use by ``bcs doctor``'s ``_check_storage``.
+       Scheduled for removal once ``bcs doctor`` migrates to adapter data.
+    """
     if not _DEV.is_dir():
         return []
     return [
@@ -253,6 +262,14 @@ def collect_network() -> list[NetworkInterface]:
     ``ipAddresses``): pure-stdlib, per-interface IP discovery isn't
     portable without either a new dependency or shelling out to
     ``ip``/``ifconfig``, neither of which is in scope for this pass.
+
+    .. deprecated::
+       Legacy fallback. The Network Adapter
+       (``bcs.platform.adapters.network.adapter.read_network_interfaces``) is
+       the primary source via ``HostDiscoverySnapshot.network_interfaces``.
+       This collector remains as a fallback when the adapter slot is unset
+       or fails. Scheduled for removal once the orchestrator guarantees
+       adapter availability.
     """
     if not _SYS_CLASS_NET.is_dir():
         return []

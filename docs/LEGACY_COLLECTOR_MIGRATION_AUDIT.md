@@ -1,9 +1,12 @@
 # Legacy Collector Migration Audit
 
-**Post-Issue #70 state.**
+**State as of the Legacy Collector Dependency Audit (Beta M6).**
 
 Issue #70 has landed: `bcs inventory` now passes the Host Discovery Orchestrator and
 sources `storage` from the Storage Adapter with a fallback to the legacy collector.
+Beta M3 wired the Network Adapter in the composition root. This audit was performed
+to classify every legacy collector by migration status and mark Category B (fallback
+only) collectors with explicit ``.. deprecated::`` RST comments.
 
 This document audits every remaining legacy collector, every `HostDiscoverySnapshot`
 field, and every code path that still bypasses the orchestrator, then produces a
@@ -27,7 +30,7 @@ migration roadmap for the Beta phase.
 | **Fate** | **Migrate.** EFI adapter already produces richer data; only a mapping function is missing. |
 | **Beta milestone** | M2b (doctor wiring) + M4 (Secure Boot real implementation) |
 
-### 1.2 `collect_storage()` — lines 95–102
+### 1.2 `collect_storage()` — lines 95–119
 
 | Attribute | Value |
 |---|---|
@@ -38,7 +41,7 @@ migration roadmap for the Beta phase.
 | **Current callers** | `service.py:124,133` (fallback only), `doctor.py:74` (always) |
 | **Used by CLI?** | `bcs inventory` — via HDO path after #70 ✅ |
 | **Fallback available?** | ✅ Yes — implemented in #70 (`service.py:130-134`) |
-| **Fate** | **Deprecated.** Called only as fallback from `service.py` and unconditionally from `doctor.py`. Can be removed after doctor migrates. |
+| **Fate** | **Deprecated (Category B).** Called only as fallback from `service.py` and unconditionally from `doctor.py`. Marked with ``.. deprecated::`` RST comment in source. Can be removed after doctor migrates. |
 | **Beta milestone** | M1 (done), M2b (doctor) |
 
 ### 1.3 `collect_efi_system_partition()` — lines 105–128
@@ -125,19 +128,19 @@ migration roadmap for the Beta phase.
 | **Fate** | **Keep.** Already reused by HDO. Never create a tool-based adapter. |
 | **Beta milestone** | N/A (already done) |
 
-### 1.9 `collect_network()` — lines 249–272
+### 1.9 `collect_network()` — lines 258–291
 
 | Attribute | Value |
 |---|---|
 | **Purpose** | Read `/sys/class/net/*/address` + `operstate`; `ip_addresses` always `[]` (placeholder) |
 | **Adapter equivalent** | ✅ **Network adapter** (`read_network_interfaces`) — fully implemented, 100% tested, produces `NetworkInterfaceStatus` with real IP addresses |
-| **Adapter wired?** | ❌ **No.** `app.py:218` binds `collectors.collect_network` directly, NOT the Network Adapter. |
+| **Adapter wired?** | ✅ **Yes (Beta M3).** `app.py` now binds the Network Adapter via the composition root. `collect_network` is only a fallback when the adapter slot is unset or fails. |
 | **HDO slot** | `HostDiscoverySnapshot.network` |
-| **Current callers** | `service.py:123,129` (HDO path), `doctor.py:99` (legacy) |
-| **Used by CLI?** | ✅ Yes — but `ip_addresses` is always empty |
-| **Fallback available?** | No fallback needed — network has no required-field constraint |
-| **Fate** | **Deprecate.** Replace with Network Adapter in the composition root. |
-| **Beta milestone** | M3 |
+| **Current callers** | `service.py:123,129` (HDO path, fallback only), `doctor.py:99` (legacy) |
+| **Used by CLI?** | ✅ Yes — real IP addresses now appear in `bcs inventory` output |
+| **Fallback available?** | ✅ Yes — `collect_network` is called when the adapter slot is unset or fails |
+| **Fate** | **Deprecated (Category B).** Marked with ``.. deprecated::`` RST comment in source. Replace with Network Adapter in the composition root. |
+| **Beta milestone** | M3 (done) |
 
 ### 1.10 `collect_tooling()` — lines 360–365
 
@@ -267,17 +270,9 @@ else:
 
 **Outcome:** Removes the last `UNKNOWN`-always Secure Boot path from `collect_host_inventory`.
 
-### Migration 3 — Network Adapter Wiring (M3)
+### Migration 3 — Network Adapter Wiring (M3) ✅ DONE
 
-**Current state:** `app.py:218` binds `collectors.collect_network`. The Network Adapter (`read_network_interfaces`) is implemented and tested but not wired.
-
-**Target state:** `app.py:218` binds `functools.partial(read_network_interfaces, runner=command_runner)`.
-
-**Dependencies:** Model translation layer — the Network Adapter's `NetworkInterface` model is independently defined from `inventory.models.NetworkInterface`. A `_translate_network_interfaces()` function is needed.
-
-**Complexity:** Low — 2 lines changed in `app.py`, ~20 lines translation function in `service.py`.
-
-**Risk:** Low — network has no required fields; empty result is valid.
+**Status:** Complete (Beta M3). `app.py` now binds the Network Adapter (`read_network_interfaces`) via the composition root. Real IP addresses appear in `bcs inventory` output for the first time. The legacy `collect_network()` remains as a fallback when the adapter slot is unset or fails, and is marked with a ``.. deprecated::`` RST comment.
 
 **Outcome:** IP addresses appear in `bcs inventory` for the first time. `doctor.py`'s `_check_network` also gets real IP data (after Migration 1).
 
@@ -369,7 +364,7 @@ Zero-dependency independent:
 |---|---|---|
 | **Filesystem adapter runs but its output is discarded** | `app.py:217` + `discovery/models.py:138` | Wasted subprocess (`df`) on every `bcs` invocation. Produces `HostDiscoverySnapshot.filesystem` that no code reads. |
 | ~~**Secure Boot adapter runs but its output is discarded**~~ **Resolved (Beta M4)** | `app.py:216` (composition root) | Real Secure Boot state now reaches both `bcs inventory` (`HostInventory.firmware.secureBoot`, via the orchestrator) and `bcs doctor` (`_check_secure_boot()`, via a direct `read_secure_boot_status(runtime.command_runner)` call) — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`. |
-| **`doctor.py` mostly bypasses orchestrator/adapters** | `commands/doctor.py:29-49,106-121` | `bcs doctor` and `bcs inventory` read different data sources for `storage`/`esp`/`network`/`usb-storage`/`tooling`/`firmware`. The `secure-boot` check no longer has this problem (Beta M4, reads the same underlying adapter `bcs inventory` does, just via a separate call) — the module docstring was corrected to no longer claim uniform agreement across every check. |
+| **`doctor.py` mostly bypasses orchestrator/adapters** | `commands/doctor.py:29-49,106-121` | `bcs doctor` and `bcs inventory` read different data sources for `storage`/`esp`/`network`/`usb-storage`/`tooling`/`firmware`. The `secure-boot` check no longer has this problem (Beta M4, reads the same underlying adapter `bcs inventory` does, just via a separate call) — the module docstring was corrected to no longer claim uniform agreement across every check. The `network` check still reads `collect_network()` directly (legacy) while inventory reads from the Network Adapter — same-data guarantee not reached until Migration 1. |
 | **Caveats are collected but never exposed** | `discovery/orchestrator.py:93-102` + `discovery/models.py:158-166` | If an adapter fails, the error is recorded in `caveats` but no command displays it. Silent failures. |
 
 ### MEDIUM
@@ -380,7 +375,7 @@ Zero-dependency independent:
 | **Duplicate null-MAC constant** | `collectors.py:59` and `network/parser.py:40` | Both define `_NULL_MAC = "00:00:00:00:00:00"` independently. |
 | **`_read_text()` is a generic utility trapped in `collectors.py`** | `collectors.py:70-76` | Cannot be imported by platform adapters. If the Filesystem adapter (or any future adapter) needs it, the utility must be extracted or duplicated. |
 | **Legacy `_read_secure_boot_state()` always returns `UNKNOWN`** | `collectors.py:86-92` | Still true of the function itself (unchanged) - but it is now only the *fallback* path (Beta M4), used when the Secure Boot Adapter is unavailable; the primary path reports real state. |
-| **`collect_storage()` still exists as dead fallback** | `collectors.py:95-102` | After doctor migrates, this function will only be called when the storage adapter slot is unset or fails — a rare edge case that nonetheless requires maintaining 380 lines of collector code. |
+| **`collect_storage()` still exists as dead fallback** | `collectors.py:95-119` | After doctor migrates, this function will only be called when the storage adapter slot is unset or fails — a rare edge case that nonetheless requires maintaining 380 lines of collector code. Marked with ``.. deprecated::`` RST comment. |
 
 ### LOW
 
@@ -396,16 +391,16 @@ Zero-dependency independent:
 ## 7. Collector Fate Summary
 
 | Collector | Fate | Reason | Removal Trigger |
-|---|---|---|---|
+|---|---|---|---|---|
 | `collect_firmware()` | **Delete** | Replaced by EFI + Secure Boot adapters | After Migration 2 |
-| `collect_storage()` | **Delete** | Replaced by Storage adapter | After doctor migrates |
+| `collect_storage()` | **Delete (Category B)** | Replaced by Storage adapter. Marked with ``.. deprecated::`` RST comment. | After doctor migrates |
 | `collect_efi_system_partition()` | **Delete** | Replaced by new ESP business service | After Migration 4 |
 | `collect_usb_storage()` | **Delete** | Replaced by `is_removable` filter | After Migration 5 |
 | `collect_identity()` | **Delete** | Replaced by EFI + network adapter data | After Migration 6 |
 | `collect_operating_system()` | **Keep as HDO slot** | Pure stdlib, like cpu/memory | Never |
 | `collect_cpu()` | **Keep as HDO slot** | Pure stdlib | Never |
 | `collect_memory()` | **Keep as HDO slot** | Pure stdlib | Never |
-| `collect_network()` | **Delete** | Replaced by Network Adapter | After Migration 3 |
+| `collect_network()` | **Delete (Category B)** | Replaced by Network Adapter (wired in Beta M3). Marked with ``.. deprecated::`` RST comment. | After Migration 1 (doctor) |
 | `collect_tooling()` | **Keep as HDO slot** | Pure stdlib | Never |
 
 ---
