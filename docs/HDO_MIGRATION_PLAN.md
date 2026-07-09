@@ -23,7 +23,7 @@ Replace legacy proxy collectors with the Host Discovery Orchestrator.
 | Inventory Field | Legacy Source | HDO Source | HDO Field | Status |
 |---|---|---|---|---|
 | `uefi` | `collect_firmware()` → `/sys/firmware/efi` | `discovery.firmware_boot_mode` | `== FirmwareBootMode.UEFI` | ✅ — unused by `collect_host_inventory` |
-| `secure_boot` | `collect_firmware()` → sbctl | `discovery.secure_boot_status` | `SecureBootStatus` enum | ⏳ Dual-read available; doctor still calls legacy |
+| `secure_boot` | `collect_firmware()` → `mokutil` (this document's own `sbctl` naming predates the actual implementation) | `HostDiscoverySnapshot.secure_boot` | `SecureBootStatus` (`bcs.platform.adapters.secureboot.models`) | ✅ **Resolved, Beta M4** — `bcs inventory` reads it via the orchestrator (translated into `firmware.secure_boot`); `bcs doctor` reads the same adapter via a **direct** `read_secure_boot_status(runtime.command_runner)` call, not this row's own originally-envisioned shared-`DiscoveryResult` read (see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md` and this document's own PR 2 correction note below). |
 
 ### Operating System
 
@@ -103,7 +103,9 @@ Replace legacy proxy collectors with the Host Discovery Orchestrator.
 
 **Change:** `_check_firmware`, `_check_secure_boot`, `_check_storage`, `_check_esp`, `_check_usb_storage`, `_check_network`, `_check_tooling` — every check that currently calls a `collect_*` directly — instead calls the orchestrator once and reads from `DiscoveryResult`.
 
-**Why this matters:** Today `bcs doctor` and `bcs inventory` can disagree. After this PR they read the same data.
+**Correction (Beta M4):** this "call the orchestrator once, every check reads from it" shape conflicts with [ADR-0011 § Alternatives Considered](decisions/0011-host-discovery-orchestrator.md#alternatives-considered), which explicitly rejected it for `bcs doctor` — a single check must never pay for, or be blocked by, an unrelated domain's adapter call. `_check_secure_boot` was migrated instead using the pattern the ADR does sanction: a direct, single-adapter call (`read_secure_boot_status(runtime.command_runner)`), not a shared `DiscoveryResult`. Any future PR migrating the remaining six checks should follow that same per-check-direct-call shape, not this section's original one-shared-sweep proposal — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`.
+
+**Why this matters:** Today `bcs doctor` and `bcs inventory` can disagree for most checks. `secure-boot` no longer has this problem (Beta M4) since both now read the same underlying adapter, each via its own call.
 
 **Test approach (see §4):** No new fixtures needed — `doctor.py` tests mock the collectors already. The same approach applies: mock `HostDiscoveryOrchestrator.collect()` and return a `DiscoveryResult`.
 

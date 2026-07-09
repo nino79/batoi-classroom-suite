@@ -17,6 +17,13 @@ from bcs.inventory.models import (
     UsbStorageDevice,
 )
 from bcs.output import OutputFormat
+from bcs.platform.adapters.secureboot.errors import (
+    SecureBootParseError,
+    SecureBootUnavailableError,
+)
+from bcs.platform.adapters.secureboot.models import SecureBootState as PlatformSecureBootState
+from bcs.platform.adapters.secureboot.models import SecureBootStatus
+from bcs.platform.errors import CommandNotFoundError
 
 # ---------------------------------------------------------------------------
 # Individual check-evaluation logic, exercised directly against a
@@ -47,23 +54,179 @@ def test_check_firmware_fail_when_not_uefi(monkeypatch: pytest.MonkeyPatch) -> N
     assert result.status == "fail"
 
 
+# ---------------------------------------------------------------------------
+# _check_secure_boot (Beta M4) - a direct call to the Secure Boot Platform
+# Adapter via runtime.command_runner, never HostDiscoveryOrchestrator.discover()
+# (ADR-0011's own rejection of a full-sweep orchestrator for bcs doctor - see
+# _check_secure_boot's own docstring). read_secure_boot_status is monkeypatched
+# directly, mirroring how every other check here monkeypatches its own single
+# collector - no real/fake CommandRunner needed at this level.
+# ---------------------------------------------------------------------------
+
+
+def test_check_secure_boot_skip_when_not_uefi(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_firmware",
+        lambda: FirmwareInfo(uefi=False, secureBoot=SecureBootState.UNSUPPORTED),
+    )
+
+    def _must_not_be_called(runner: object) -> SecureBootStatus:
+        raise AssertionError("read_secure_boot_status must not be called when not UEFI")
+
+    monkeypatch.setattr(doctor_module, "read_secure_boot_status", _must_not_be_called)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_secure_boot(runtime)
+    assert result.status == "skip"
+
+
 @pytest.mark.parametrize(
     ("state", "expected_status"),
     [
-        (SecureBootState.UNSUPPORTED, "skip"),
-        (SecureBootState.UNKNOWN, "warn"),
-        (SecureBootState.ENABLED, "ok"),
-        (SecureBootState.DISABLED, "warn"),
+        (PlatformSecureBootState.ENABLED, "ok"),
+        (PlatformSecureBootState.DISABLED, "warn"),
     ],
 )
-def test_check_secure_boot_maps_every_state(
-    monkeypatch: pytest.MonkeyPatch, state: SecureBootState, expected_status: str
+def test_check_secure_boot_maps_enabled_and_disabled(
+    make_runtime_context,
+    monkeypatch: pytest.MonkeyPatch,
+    state: PlatformSecureBootState,
+    expected_status: str,
 ) -> None:
     monkeypatch.setattr(
-        doctor_module, "collect_firmware", lambda: FirmwareInfo(uefi=True, secureBoot=state)
+        doctor_module,
+        "collect_firmware",
+        lambda: FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN),
     )
-    result = doctor_module._check_secure_boot()
+    monkeypatch.setattr(
+        doctor_module,
+        "read_secure_boot_status",
+        lambda _runner: SecureBootStatus(state=state, rawText=f"SecureBoot {state.value}\n"),
+    )
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_secure_boot(runtime)
     assert result.status == expected_status
+
+
+def test_check_secure_boot_warn_when_adapter_reports_unknown(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A successfully-returned but indeterminate ``SecureBootStatus``
+    (``state=UNKNOWN`` - never actually produced by the real parser
+    today, but handled defensively) degrades to ``warn``, not a crash.
+    """
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_firmware",
+        lambda: FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "read_secure_boot_status",
+        lambda _runner: SecureBootStatus(state=PlatformSecureBootState.UNKNOWN, rawText=""),
+    )
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_secure_boot(runtime)
+    assert result.status == "warn"
+    assert "unknown" in result.message
+
+
+def test_check_secure_boot_warn_when_mokutil_not_found(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The adapter's own ``PlatformError`` subclasses (raised e.g. when
+    ``mokutil`` is missing, as on the project's own VirtualBox E01
+    environment) degrade to a non-crashing ``warn`` result - ``bcs
+    doctor`` never crashes because one tool is absent.
+    """
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_firmware",
+        lambda: FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN),
+    )
+
+    def _raise_not_found(runner: object) -> SecureBootStatus:
+        raise CommandNotFoundError("mokutil not found", executable="mokutil")
+
+    monkeypatch.setattr(doctor_module, "read_secure_boot_status", _raise_not_found)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_secure_boot(runtime)
+    assert result.status == "warn"
+    assert "CommandNotFoundError" in result.message
+    assert "mokutil not found" in result.message
+
+
+def test_check_secure_boot_warn_when_unavailable(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_firmware",
+        lambda: FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN),
+    )
+
+    def _raise_unavailable(runner: object) -> SecureBootStatus:
+        raise SecureBootUnavailableError("Secure Boot state is not available in this environment.")
+
+    monkeypatch.setattr(doctor_module, "read_secure_boot_status", _raise_unavailable)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_secure_boot(runtime)
+    assert result.status == "warn"
+    assert "SecureBootUnavailableError" in result.message
+
+
+def test_check_secure_boot_warn_when_parse_error(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_firmware",
+        lambda: FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN),
+    )
+
+    def _raise_parse_error(runner: object) -> SecureBootStatus:
+        raise SecureBootParseError("Failed to parse mokutil output: no recognized line", text="")
+
+    monkeypatch.setattr(doctor_module, "read_secure_boot_status", _raise_parse_error)
+
+    runtime = make_runtime_context()
+    result = doctor_module._check_secure_boot(runtime)
+    assert result.status == "warn"
+    assert "SecureBootParseError" in result.message
+
+
+def test_check_secure_boot_uses_runtime_command_runner(
+    make_runtime_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exact ``runtime.command_runner`` instance is passed through -
+    not a second, independently constructed one - matching every other
+    Platform Layer consumer's own DI discipline.
+    """
+    monkeypatch.setattr(
+        doctor_module,
+        "collect_firmware",
+        lambda: FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN),
+    )
+    captured: dict[str, object] = {}
+
+    def _capturing(runner: object) -> SecureBootStatus:
+        captured["runner"] = runner
+        return SecureBootStatus(
+            state=PlatformSecureBootState.ENABLED, rawText="SecureBoot enabled\n"
+        )
+
+    monkeypatch.setattr(doctor_module, "read_secure_boot_status", _capturing)
+
+    runtime = make_runtime_context()
+    doctor_module._check_secure_boot(runtime)
+    assert captured["runner"] is runtime.command_runner
 
 
 def test_check_storage_ok_when_nvme_present(monkeypatch: pytest.MonkeyPatch) -> None:

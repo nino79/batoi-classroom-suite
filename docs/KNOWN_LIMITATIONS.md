@@ -2,17 +2,17 @@
 
 This document records limitations and gaps in the current implementation. These are **known, accepted, and tracked** — not bugs to be surprised by. Each item links to its owning design document, ADR, or issue for detail.
 
-## Host Discovery Orchestrator Not Consumed by `bcs doctor`
+## Host Discovery Orchestrator Not Consumed by Most of `bcs doctor`
 
-**Severity:** Medium — narrowed from High now that `bcs inventory` consumes it (issue [#70](https://github.com/nino79/batoi-classroom-suite/issues/70))
+**Severity:** Medium — narrowed from High now that `bcs inventory` consumes it (issue [#70](https://github.com/nino79/batoi-classroom-suite/issues/70)) and `bcs doctor`'s Secure Boot check reads its adapter directly (Beta M4)
 
-The `HostDiscoveryOrchestrator` is fully implemented, wired into `RuntimeContext` at the composition root, and test-verified end to end. `bcs inventory` now passes `runtime.host_discovery_orchestrator` into `collect_host_inventory()`, which sources `cpu`/`memory`/`network`/`storage` from the Discovery snapshot (falling back to the legacy collector per-field when a slot is unwired or its adapter raised a `PlatformError`). `bcs doctor` still sources every fact from the original `bcs.inventory.collectors` directly — it is out of scope for issue #70/Beta M3 (see `docs/ISSUE_70_IMPLEMENTATION_CHECKLIST.md` § 7) because its `storage`/`esp`/`network` checks call collectors directly rather than going through `collect_host_inventory()` (see `docs/HOST_INVENTORY.md`); `_check_network()` (`cli/src/bcs/commands/doctor.py`) specifically still calls `collect_network()` directly, so `bcs doctor --check network` does not benefit from the Network Adapter's `ip_addresses` data either.
+The `HostDiscoveryOrchestrator` is fully implemented, wired into `RuntimeContext` at the composition root, and test-verified end to end. `bcs inventory` passes `runtime.host_discovery_orchestrator` into `collect_host_inventory()`, which sources `cpu`/`memory`/`network`/`storage`/`firmware.secure_boot` from the Discovery snapshot (falling back to the legacy collector per-field when a slot is unwired or its adapter raised a `PlatformError`). `bcs doctor`'s Secure Boot check (`_check_secure_boot()`, Beta M4) also now reports real state — but via a **direct** call to `read_secure_boot_status(runtime.command_runner)`, never `runtime.host_discovery_orchestrator.discover()`, per [ADR-0011 § Alternatives Considered](decisions/0011-host-discovery-orchestrator.md#alternatives-considered)'s explicit rejection of a full-sweep orchestrator for `bcs doctor` (see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`). `bcs doctor`'s other checks still source every fact from the original `bcs.inventory.collectors` directly — out of scope for issue #70/Beta M3/Beta M4 (see `docs/ISSUE_70_IMPLEMENTATION_CHECKLIST.md` § 7) because `storage`/`esp`/`network` call collectors directly rather than going through `collect_host_inventory()` (see `docs/HOST_INVENTORY.md`); `_check_network()` (`cli/src/bcs/commands/doctor.py`) specifically still calls `collect_network()` directly, so `bcs doctor --check network` does not benefit from the Network Adapter's `ip_addresses` data.
 
-**Impact:** Adapter-sourced facts outside `HostInventory`'s existing schema (`firmware_boot_configuration`, `secure_boot`) are collected but never reach any command output — a separate limitation, tracked below under "Host Inventory Schema Does Not Include Discovery-Domain Facts". Tool-detection facts that *would* come from adapters (e.g. `mokutil` not found) are not surfaced to the user via `bcs doctor`.
+**Impact:** Adapter-sourced facts outside `HostInventory`'s existing schema (`firmware_boot_configuration`, and `secure_boot`'s own `setup_mode`/`raw_text`) are collected but never reach any command output — a separate limitation, tracked below under "Host Inventory Schema Does Not Include Discovery-Domain Facts". Tool-detection facts that *would* come from adapters for the still-unfixed checks (e.g. `ip` not found, for `network`) are not surfaced to the user via `bcs doctor`.
 
-**Resolved real-world symptoms:** the first real-world validation run (Ubuntu 24.04, VirtualBox, SATA disk — see `docs/REAL_WORLD_VALIDATION.md`) showed `bcs inventory` reporting `storage: []` on a machine where `lsblk` correctly enumerated `/dev/sda` and its partitions. Root cause: `collect_storage()` (`cli/src/bcs/inventory/collectors.py`) intentionally enumerates only `/dev/nvme*` (per `PLAT-005`), while the Storage Adapter enumerates every device `lsblk` reports. `bcs inventory` now translates and reports the Storage Adapter's output when the orchestrator's `storage` slot is available, resolving this specific symptom. Separately, `NetworkInterface.ip_addresses` was a permanent placeholder gap in `bcs inventory` output — `collect_network()` never populated it (pure-stdlib IP discovery wasn't in scope); `bcs inventory` now translates and reports the Network Adapter's `ip -json addr show` data when the orchestrator's `network` slot is available, closing that gap too (Beta M3). Re-validation on the same VM belongs in `docs/VM_TEST_LOG.md` as a new entry, not as an edit to `docs/REAL_WORLD_VALIDATION.md` (a fixed historical record by its own stated policy).
+**Resolved real-world symptoms:** the first real-world validation run (Ubuntu 24.04, VirtualBox, SATA disk — see `docs/REAL_WORLD_VALIDATION.md`) showed `bcs inventory` reporting `storage: []` on a machine where `lsblk` correctly enumerated `/dev/sda` and its partitions. Root cause: `collect_storage()` (`cli/src/bcs/inventory/collectors.py`) intentionally enumerates only `/dev/nvme*` (per `PLAT-005`), while the Storage Adapter enumerates every device `lsblk` reports. `bcs inventory` now translates and reports the Storage Adapter's output when the orchestrator's `storage` slot is available, resolving this specific symptom. `NetworkInterface.ip_addresses` was a permanent placeholder gap in `bcs inventory` output — `collect_network()` never populated it (pure-stdlib IP discovery wasn't in scope); `bcs inventory` now translates and reports the Network Adapter's `ip -json addr show` data when the orchestrator's `network` slot is available, closing that gap too (Beta M3). `FirmwareInfo.secure_boot` reported `unknown` under UEFI unconditionally — `_read_secure_boot_state()` never actually read the `SecureBoot` EFI variable; `bcs inventory`/`bcs doctor` both now report the real state via the Secure Boot Adapter (Beta M4). Re-validation on the same VM belongs in `docs/VM_TEST_LOG.md` as a new entry, not as an edit to `docs/REAL_WORLD_VALIDATION.md` (a fixed historical record by its own stated policy).
 
-**Tracking:** `docs/HOST_DISCOVERY_ORCHESTRATOR.md` status banner; `docs/IMPLEMENTATION_STATUS.md §8` Outstanding Work; `docs/ISSUE_70_IMPLEMENTATION_CHECKLIST.md`; `docs/BETA_ROADMAP.md` (Milestone M3); issue [#70](https://github.com/nino79/batoi-classroom-suite/issues/70) (`bcs inventory` storage — done) and issue [#78](https://github.com/nino79/batoi-classroom-suite/issues/78) (the full legacy-collector deprecation arc this fits into, including `bcs doctor`).
+**Tracking:** `docs/HOST_DISCOVERY_ORCHESTRATOR.md` status banner; `docs/IMPLEMENTATION_STATUS.md §8` Outstanding Work; `docs/ISSUE_70_IMPLEMENTATION_CHECKLIST.md`; `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`; `docs/BETA_ROADMAP.md` (Milestones M3/M4); issue [#70](https://github.com/nino79/batoi-classroom-suite/issues/70) (`bcs inventory` storage — done) and issue [#78](https://github.com/nino79/batoi-classroom-suite/issues/78) (the full legacy-collector deprecation arc this fits into, including `bcs doctor`'s remaining checks).
 
 ## 7 Stub Commands
 
@@ -24,13 +24,13 @@ The `HostDiscoveryOrchestrator` is fully implemented, wired into `RuntimeContext
 
 **Tracking:** Phases 1-3 on `ROADMAP.md`.
 
-## Host Inventory Schema Does Not Include Discovery-Domain Facts
+## Host Inventory Schema Does Not Include the Full Discovery-Domain Facts
 
 **Severity:** Medium — planned enhancement
 
-`firmware_boot_configuration`, `storage_topology`, `secure_boot`, and `filesystem_usage` live on `HostDiscoverySnapshot` but are never folded into `HostInventory`'s own schema. Per ADR-0011 Decision point 6, this requires a separate ADR-0008 amendment.
+`firmware_boot_configuration` and `filesystem_usage` live on `HostDiscoverySnapshot` but are never folded into `HostInventory`'s own schema — no new field exists for either. Per ADR-0011 Decision point 6, adding one requires a separate ADR-0008 amendment. (`storage_topology`'s and `secure_boot`'s own *richer* shapes — partitions/mounts/vendor/serial, and `setup_mode`/`raw_text` respectively — are in the same position; only their narrower, already-existing-field equivalents (`storage`, `firmware.secure_boot`) are populated, via translation, not by adding a new field — see issue #70/Beta M3/Beta M4.)
 
-**Impact:** `bcs inventory --output json` does not include UEFI boot entries, detailed storage topology, or Secure Boot status from the tool-based adapters.
+**Impact:** `bcs inventory --output json` does not include UEFI boot entries or detailed filesystem usage from the tool-based adapters, and does not include the richer storage/Secure Boot facts (partition tables, Setup Mode) beyond what `storage`/`firmware.secureBoot` already expose.
 
 **Tracking:** ADR-0011 Decision point 6.
 
@@ -83,16 +83,6 @@ The `HostDiscoveryAdapters` and `HostDiscoverySnapshot` types reserve a `tpm` sl
 **Impact:** The `tpm` domain is always absent from discovery snapshots and will never appear in any command output. Adding it later requires an adapter design document, an adapter implementation, and composition-root wiring — exactly the process in `docs/PATTERNS.md`.
 
 **Tracking:** `docs/HOST_DISCOVERY_ORCHESTRATOR.md § Future Extensibility`.
-
-## `_read_secure_boot_state()` Collector Returns Placeholder `UNKNOWN`
-
-**Severity:** Medium — inventory Secure Boot field is always `UNKNOWN`
-
-The legacy `bcs.inventory.collectors._read_secure_boot_state()` function (`cli/src/bcs/inventory/collectors.py:86`) always returns `SecureBootState.UNKNOWN`. The comment at line 89–91 explicitly marks it as "a placeholder for future work." The tool-based Secure Boot Adapter (`bcs.platform.adapters.secureboot`) correctly reads `mokutil --sb-state`, but its output is held in `HostDiscoverySnapshot.secure_boot` — which no `bcs` command consumes.
-
-**Impact:** `bcs inventory` always reports `secureBoot: unknown` regardless of actual firmware state. `bcs doctor --check secure-boot` uses the adapter path (via `HostDiscoverySnapshot`) only when the orchestrator is passed through — which currently never happens — so `bcs doctor secure-boot` also returns `UNKNOWN` on the legacy path.
-
-**Tracking:** `docs/HOST_DISCOVERY_ORCHESTRATOR.md` status banner; `docs/IMPLEMENTATION_STATUS.md §8` Outstanding Work (High).
 
 ## `FrozenModel`/`FrozenExtensibleModel` Not Relocated
 

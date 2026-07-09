@@ -43,7 +43,17 @@ Decision point 7): :func:`collect_host_inventory` accepts an optional
   the snapshot field ``None``), falls back to
   ``collect_storage()``/``collect_network()`` exactly as it would
   without an orchestrator at all.
-- Every other section (``identity``, ``firmware``, ``operating_system``,
+- ``firmware.secure_boot`` follows the same fallback shape too (Beta
+  M4, Secure Boot integration): when ``snapshot.secure_boot`` is not
+  ``None``, ``collect_firmware()``'s own ``secure_boot`` value is
+  overridden with the translated (:func:`_translate_secure_boot_state`)
+  adapter-observed state, via ``FirmwareInfo.model_copy(update=...)``;
+  ``firmware.uefi``/``.vendor``/``.version`` are always
+  collector-sourced regardless - the Secure Boot Adapter has no
+  opinion on any of them. An unset ``secure_boot`` slot, or one whose
+  adapter raised a ``PlatformError``, leaves ``firmware`` exactly as
+  ``collect_firmware()`` returned it.
+- Every other section (``identity``, ``operating_system``,
   ``efi_system_partition``, ``usb_storage``, ``tooling``) is unaffected
   either way - unconditionally sourced from the same collectors,
   whether or not an orchestrator was given.
@@ -75,8 +85,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from bcs.inventory import collectors
-from bcs.inventory.models import HostInventory, NetworkInterface, StorageDevice
+from bcs.inventory.models import HostInventory, NetworkInterface, SecureBootState, StorageDevice
 from bcs.platform.adapters.network.models import NetworkInterfaceStatus
+from bcs.platform.adapters.secureboot.models import SecureBootStatus
 from bcs.platform.adapters.storage.models import StorageConfiguration
 
 if TYPE_CHECKING:
@@ -138,6 +149,22 @@ def _translate_network_interfaces(status: NetworkInterfaceStatus) -> list[Networ
     ]
 
 
+def _translate_secure_boot_state(status: SecureBootStatus) -> SecureBootState:
+    """Translate the Secure Boot Adapter's ``SecureBootState`` into
+    ``bcs.inventory.models.SecureBootState`` (Beta M4, Secure Boot
+    integration).
+
+    Both are four-value ``StrEnum``s sharing identical string values by
+    deliberate design (see
+    ``docs/SECURE_BOOT_ADAPTER.md#naming-rationale``) - a
+    value-preserving conversion, not a lookup table.
+    ``SecureBootStatus.setup_mode``/``.raw_text`` are not carried over -
+    ``HostInventory``'s ``FirmwareInfo`` has no field for either, and
+    this function is a narrowing translation, not a schema change.
+    """
+    return SecureBootState(status.state.value)
+
+
 def collect_host_inventory(
     orchestrator: HostDiscoveryOrchestrator | None = None,
 ) -> HostInventory:
@@ -146,6 +173,7 @@ def collect_host_inventory(
     See this module's own docstring for the optional ``orchestrator``
     parameter's exact contract.
     """
+    firmware = collectors.collect_firmware()
     if orchestrator is None:
         cpu = collectors.collect_cpu()
         memory = collectors.collect_memory()
@@ -165,11 +193,15 @@ def collect_host_inventory(
             if snapshot.network is not None
             else collectors.collect_network()
         )
+        if snapshot.secure_boot is not None:
+            firmware = firmware.model_copy(
+                update={"secure_boot": _translate_secure_boot_state(snapshot.secure_boot)}
+            )
 
     return HostInventory(
         collected_at=datetime.now(UTC),
         identity=collectors.collect_identity(),
-        firmware=collectors.collect_firmware(),
+        firmware=firmware,
         operating_system=collectors.collect_operating_system(),
         cpu=cpu,
         memory=memory,

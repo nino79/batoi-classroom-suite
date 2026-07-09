@@ -6,14 +6,23 @@ another and of whether a ClassroomConfig resolves at all - only the
 is a ``warn``, not a hard failure, since ``doctor`` is meant to be
 useful before a classroom has been configured yet.
 
-``firmware``, ``secure-boot``, ``esp``, ``storage``, ``usb-storage``,
-``network``, and ``tooling`` are pass/fail *evaluations* of facts
-collected by the Host Inventory subsystem (:mod:`bcs.inventory`) - they
-no longer probe the host directly, so ``bcs doctor`` and ``bcs
-inventory`` can never disagree about what the machine actually looks
-like. ``permissions`` (a fact about the current *process*, not the
-host) and ``config`` (a ClassroomConfig concern) are doctor-specific
-and stay outside the inventory subsystem's scope.
+``firmware``, ``esp``, ``storage``, ``usb-storage``, ``network``, and
+``tooling`` are pass/fail *evaluations* of facts collected by the Host
+Inventory subsystem (:mod:`bcs.inventory`) - they no longer probe the
+host directly, so ``bcs doctor`` and ``bcs inventory`` can never
+disagree about what the machine actually looks like for those checks.
+``permissions`` (a fact about the current *process*, not the host) and
+``config`` (a ClassroomConfig concern) are doctor-specific and stay
+outside the inventory subsystem's scope.
+
+``secure-boot`` (Beta M4) is the one exception: it calls the Secure
+Boot Platform Adapter directly, via ``runtime.command_runner``, rather
+than the Host Inventory subsystem - deliberately, per ADR-0011's own
+"Alternatives Considered" rejecting a full
+``HostDiscoveryOrchestrator.discover()`` sweep for ``bcs doctor`` (see
+:func:`_check_secure_boot`'s own docstring). ``collect_firmware()`` is
+still used for the cheap UEFI-presence gate only, matching
+``_check_firmware()``'s own mechanism.
 """
 
 from __future__ import annotations
@@ -34,8 +43,10 @@ from bcs.inventory.collectors import (
     collect_tooling,
     collect_usb_storage,
 )
-from bcs.inventory.models import SecureBootState
 from bcs.output import OutputFormat, print_structured_result
+from bcs.platform.adapters.secureboot.adapter import read_secure_boot_status
+from bcs.platform.adapters.secureboot.models import SecureBootState as PlatformSecureBootState
+from bcs.platform.errors import PlatformError
 
 CheckStatus = Literal["ok", "warn", "fail", "skip"]
 
@@ -54,20 +65,41 @@ def _check_firmware() -> CheckResult:
     return CheckResult("firmware", "fail", "UEFI firmware not detected (PLAT-003)")
 
 
-def _check_secure_boot() -> CheckResult:
-    firmware = collect_firmware()
-    state = firmware.secure_boot
-    if state is SecureBootState.UNSUPPORTED:
+def _check_secure_boot(runtime: RuntimeContext) -> CheckResult:
+    """Evaluate Secure Boot state via a direct call to the Secure Boot
+    Platform Adapter (Beta M4), sharing ``runtime.command_runner`` with
+    every other Platform Layer collaborator.
+
+    Deliberately **not** ``runtime.host_discovery_orchestrator.discover()``:
+    per ADR-0011's own "Alternatives Considered" (the full-sweep
+    orchestrator was rejected for ``bcs doctor`` specifically, to
+    preserve each check's independence - one check must never pay for,
+    or be blocked by, an unrelated domain's adapter call). This mirrors
+    every other check in this module, which reads exactly one collector/
+    adapter directly rather than aggregating through
+    ``collect_host_inventory()``.
+    """
+    if not collect_firmware().uefi:
         return CheckResult("secure-boot", "skip", "not applicable: not running under UEFI")
-    if state is SecureBootState.UNKNOWN:
+
+    try:
+        status = read_secure_boot_status(runtime.command_runner)
+    except PlatformError as exc:
         return CheckResult(
             "secure-boot",
             "warn",
-            "Secure Boot state detection is a placeholder in this phase (PLAT-004)",
+            f"Secure Boot state could not be determined ({type(exc).__name__}: {exc}) (PLAT-004)",
         )
-    if state is SecureBootState.ENABLED:
+
+    if status.state is PlatformSecureBootState.ENABLED:
         return CheckResult("secure-boot", "ok", "Secure Boot is enabled (PLAT-004)")
-    return CheckResult("secure-boot", "warn", "Secure Boot is disabled (PLAT-004)")
+    if status.state is PlatformSecureBootState.DISABLED:
+        return CheckResult("secure-boot", "warn", "Secure Boot is disabled (PLAT-004)")
+    return CheckResult(
+        "secure-boot",
+        "warn",
+        f"Secure Boot state could not be determined ({status.state.value}) (PLAT-004)",
+    )
 
 
 def _check_storage() -> CheckResult:
@@ -148,7 +180,7 @@ def _check_config(runtime: RuntimeContext) -> CheckResult:
 
 _ALL_CHECKS: dict[str, Callable[[RuntimeContext], CheckResult]] = {
     "firmware": lambda _runtime: _check_firmware(),
-    "secure-boot": lambda _runtime: _check_secure_boot(),
+    "secure-boot": _check_secure_boot,
     "esp": lambda _runtime: _check_esp(),
     "storage": lambda _runtime: _check_storage(),
     "usb-storage": lambda _runtime: _check_usb_storage(),

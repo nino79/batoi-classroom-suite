@@ -26,7 +26,7 @@
 | [BETA_VALIDATION_PLAN.md](BETA_VALIDATION_PLAN.md) | Validation process, scope, exit criteria, bug classification, regression policy |
 | [HARDWARE_VALIDATION_MATRIX.md](HARDWARE_VALIDATION_MATRIX.md) | Per-environment expected results (8 environments) |
 | [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md) | Pre-release verification checklist (60+ items) |
-| [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | Updated: added TPM slot limitation and Secure Boot collector placeholder |
+| [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | Updated: added TPM slot limitation; the Secure Boot collector placeholder entry was later removed once Beta M4 resolved it |
 
 ### What was fixed
 
@@ -42,7 +42,7 @@
 | **Host Discovery Orchestrator not consumed by any command** | High | The orchestrator is built and wired but `bcs inventory` and `bcs doctor` still source facts from legacy collectors. Adapter-sourced facts (`firmwareBootConfiguration`, `storageTopology`, `secureBoot`) never reach command output. |
 | **`bcs inventory` reports empty storage array** | High | Observed on first end-to-end VM test. `lsblk` detects `/dev/sda` but inventory reports `storage: []`. Under investigation by separate analysis. |
 | **Network Adapter not wired into composition root** | Medium | The `network` Host Discovery slot still binds the `sysfs`-based `collect_network()` instead of the tool-based adapter. `ip_addresses` remains empty. |
-| **Secure Boot collector returns placeholder UNKNOWN** | Medium | `_read_secure_boot_state()` in `collectors.py:86` always returns `UNKNOWN`. Comment confirms "placeholder for future work." |
+| **Secure Boot collector returns placeholder UNKNOWN** | Medium | **Resolved (Beta M4).** `_read_secure_boot_state()` itself is unchanged and still always returns `UNKNOWN`, but it is now only the fallback: `bcs inventory`/`bcs doctor` both route through the Secure Boot Adapter (`mokutil --sb-state`) when available, reporting real state — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`. |
 | **No physical hardware validation yet** | Medium | E02, E03, E06 environments (physical NVMe/UEFI, LliureX 23) have not been tested. |
 | **Fixture corpora are zero-byte placeholders** | Low | `cli/tests/fixtures/{firmware,storage,secureboot,network}/` contain placeholder files only. No real hardware/VM output captured. |
 

@@ -22,6 +22,8 @@ from bcs.platform.adapters.network.models import (
     NetworkInterface as PlatformNetworkInterface,
 )
 from bcs.platform.adapters.network.models import NetworkInterfaceStatus
+from bcs.platform.adapters.secureboot.models import SecureBootState as PlatformSecureBootState
+from bcs.platform.adapters.secureboot.models import SecureBootStatus
 from bcs.platform.adapters.storage.models import BlockDevice, Partition, StorageConfiguration
 from bcs.platform.errors import PlatformError
 
@@ -168,13 +170,15 @@ def test_collect_host_inventory_runs_on_real_host_without_crashing() -> None:
 
 
 def _patch_non_discovery_collectors(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch every collector *other than* cpu/memory/network/storage -
-    the six sections that must be unaffected by whether an orchestrator
-    is given, per this module's own docstring. ``collect_storage`` is
-    also patched here as a convenient, fixed fallback value for tests
-    that don't care about storage specifically (most cpu/memory/network
-    -focused tests) - it is *not* asserting storage is unaffected (see
-    issue #70's own dedicated storage tests for that boundary instead).
+    """Patch every collector *other than* cpu/memory/network/storage/
+    firmware - the five sections that must be unaffected by whether an
+    orchestrator is given, per this module's own docstring.
+    ``collect_storage``/``collect_firmware`` are also patched here as
+    convenient, fixed fallback values for tests that don't care about
+    storage/secure-boot specifically (most cpu/memory/network-focused
+    tests) - this is *not* asserting storage/firmware are unaffected
+    (see issue #70's/Beta M4's own dedicated tests for that boundary
+    instead).
     """
     monkeypatch.setattr(
         collectors, "collect_identity", lambda: HostIdentity(primaryMacAddress="aa:bb:cc:dd:ee:ff")
@@ -297,12 +301,12 @@ def test_orchestrator_supplies_network_instead_of_collector(
 
 
 def test_orchestrator_other_sections_unaffected(monkeypatch: pytest.MonkeyPatch) -> None:
-    """identity/firmware/operating_system/efi_system_partition/
-    usb_storage/tooling always come from the same collectors, whether
-    or not an orchestrator is given. ``storage`` and ``network`` are
-    deliberately not asserted here since issue #70 / Beta M3 - both now
+    """identity/operating_system/efi_system_partition/usb_storage/tooling
+    always come from the same collectors, whether or not an orchestrator
+    is given. ``storage``/``network``/``firmware`` are deliberately not
+    asserted here since issue #70 / Beta M3 / Beta M4 - all three now
     have their own fallback-with-translation behaviour, covered by the
-    dedicated storage/network tests below.
+    dedicated storage/network/secure-boot tests below.
     """
     _patch_non_discovery_collectors(monkeypatch)
     monkeypatch.setattr(collectors, "collect_cpu", lambda: CpuInfo(architecture="x86_64"))
@@ -315,7 +319,6 @@ def test_orchestrator_other_sections_unaffected(monkeypatch: pytest.MonkeyPatch)
     )
 
     assert without_orchestrator.identity == with_orchestrator.identity
-    assert without_orchestrator.firmware == with_orchestrator.firmware
     assert without_orchestrator.operating_system == with_orchestrator.operating_system
     assert without_orchestrator.efi_system_partition == with_orchestrator.efi_system_partition
     assert without_orchestrator.usb_storage == with_orchestrator.usb_storage
@@ -332,12 +335,16 @@ def test_orchestrator_is_called_exactly_once(monkeypatch: pytest.MonkeyPatch) ->
     memory_adapter = _CountingAdapter(MemoryInfo(totalBytes=1024))
     network_adapter = _CountingAdapter(_make_network_interface_status())
     storage_adapter = _CountingAdapter(StorageConfiguration())
+    secure_boot_adapter = _CountingAdapter(
+        SecureBootStatus(state=PlatformSecureBootState.ENABLED, rawText="SecureBoot enabled\n")
+    )
     orchestrator = HostDiscoveryOrchestrator(
         HostDiscoveryAdapters(
             cpu=cpu_adapter,
             memory=memory_adapter,
             network=network_adapter,
             storage=storage_adapter,
+            secure_boot=secure_boot_adapter,
         )
     )
 
@@ -347,6 +354,7 @@ def test_orchestrator_is_called_exactly_once(monkeypatch: pytest.MonkeyPatch) ->
     assert memory_adapter.call_count == 1
     assert network_adapter.call_count == 1
     assert storage_adapter.call_count == 1
+    assert secure_boot_adapter.call_count == 1
 
 
 def test_orchestrator_cpu_none_falls_back_to_collector(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -544,6 +552,110 @@ def test_collect_host_inventory_without_orchestrator_uses_collect_network(
     inventory = service.collect_host_inventory()
 
     assert inventory.network == expected_network
+
+
+def test_orchestrator_supplies_secure_boot_instead_of_collector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mirrors ``test_orchestrator_supplies_storage_instead_of_collector``,
+    for ``firmware.secure_boot`` (Beta M4, Secure Boot integration) -
+    the "adapter path" case.
+    """
+    _patch_non_discovery_collectors(monkeypatch)
+    monkeypatch.setattr(collectors, "collect_cpu", lambda: CpuInfo(architecture="x86_64"))
+    monkeypatch.setattr(collectors, "collect_memory", lambda: MemoryInfo(totalBytes=1024))
+    monkeypatch.setattr(collectors, "collect_network", lambda: [])
+    # If this were called, the test would see the collector-sourced UNKNOWN
+    # placeholder _patch_non_discovery_collectors wires up (as ENABLED, in
+    # fact), instead of the adapter-sourced state below - proving it was
+    # *not*.
+    monkeypatch.setattr(
+        collectors,
+        "collect_firmware",
+        lambda: FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN),
+    )
+
+    snapshot_secure_boot = SecureBootStatus(
+        state=PlatformSecureBootState.ENABLED, rawText="SecureBoot enabled\n"
+    )
+    orchestrator = HostDiscoveryOrchestrator(
+        HostDiscoveryAdapters(secure_boot=_CountingAdapter(snapshot_secure_boot))
+    )
+
+    inventory = service.collect_host_inventory(orchestrator)
+
+    assert inventory.firmware.secure_boot == SecureBootState.ENABLED
+    assert inventory.firmware.uefi is True  # unaffected - always collector-sourced
+
+
+def test_orchestrator_secure_boot_unset_falls_back_to_collector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The secure_boot slot was never wired -> snapshot.secure_boot is
+    None -> falls back to the same collect_firmware() call that would
+    have run without an orchestrator at all - the identical shape
+    already established for cpu/memory/storage/network (Beta M4,
+    "fallback path").
+    """
+    _patch_non_discovery_collectors(monkeypatch)
+    monkeypatch.setattr(collectors, "collect_cpu", lambda: CpuInfo(architecture="x86_64"))
+    monkeypatch.setattr(collectors, "collect_memory", lambda: MemoryInfo(totalBytes=1024))
+    monkeypatch.setattr(collectors, "collect_network", lambda: [])
+    fallback_firmware = FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN)
+    monkeypatch.setattr(collectors, "collect_firmware", lambda: fallback_firmware)
+
+    orchestrator = HostDiscoveryOrchestrator(HostDiscoveryAdapters())  # secure_boot slot unset
+    inventory = service.collect_host_inventory(orchestrator)
+
+    assert inventory.firmware == fallback_firmware
+
+
+def test_orchestrator_secure_boot_platform_error_falls_back_to_collector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The secure_boot adapter is wired but fails with a PlatformError -
+    isolated *inside* the orchestrator into a caveat (snapshot.secure_boot
+    is None), and this module falls back exactly as it does for an
+    unwired slot (Beta M4, "isolated PlatformError").
+    """
+    _patch_non_discovery_collectors(monkeypatch)
+    monkeypatch.setattr(collectors, "collect_cpu", lambda: CpuInfo(architecture="x86_64"))
+    monkeypatch.setattr(collectors, "collect_memory", lambda: MemoryInfo(totalBytes=1024))
+    monkeypatch.setattr(collectors, "collect_network", lambda: [])
+    fallback_firmware = FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN)
+    monkeypatch.setattr(collectors, "collect_firmware", lambda: fallback_firmware)
+
+    failing_secure_boot_adapter = _CountingAdapter(
+        SecureBootStatus(state=PlatformSecureBootState.ENABLED, rawText=""),
+        error=PlatformError("mokutil not found"),
+    )
+    orchestrator = HostDiscoveryOrchestrator(
+        HostDiscoveryAdapters(secure_boot=failing_secure_boot_adapter)
+    )
+
+    inventory = service.collect_host_inventory(orchestrator)
+
+    assert inventory.firmware == fallback_firmware
+    assert failing_secure_boot_adapter.call_count == 1
+
+
+def test_collect_host_inventory_without_orchestrator_uses_collect_firmware(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No orchestrator given at all (Beta M4, "orchestrator unavailable")
+    - behaviour is byte-for-byte identical to before the Secure Boot
+    integration: ``firmware`` comes straight from ``collect_firmware()``.
+    """
+    _patch_non_discovery_collectors(monkeypatch)
+    monkeypatch.setattr(collectors, "collect_cpu", lambda: CpuInfo(architecture="x86_64"))
+    monkeypatch.setattr(collectors, "collect_memory", lambda: MemoryInfo(totalBytes=1024))
+    monkeypatch.setattr(collectors, "collect_network", lambda: [])
+    expected_firmware = FirmwareInfo(uefi=True, secureBoot=SecureBootState.UNKNOWN)
+    monkeypatch.setattr(collectors, "collect_firmware", lambda: expected_firmware)
+
+    inventory = service.collect_host_inventory()
+
+    assert inventory.firmware == expected_firmware
 
 
 def test_orchestrator_unexpected_exception_propagates_unchanged(
@@ -790,3 +902,50 @@ def test_translate_network_interfaces_does_not_carry_over_raw_text() -> None:
             isLoopback=False,
         )
     ]
+
+
+# ---------------------------------------------------------------------------
+# Secure Boot translation (service._translate_secure_boot_state, Beta M4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        PlatformSecureBootState.ENABLED,
+        PlatformSecureBootState.DISABLED,
+        PlatformSecureBootState.UNSUPPORTED,
+        PlatformSecureBootState.UNKNOWN,
+    ],
+)
+def test_translate_secure_boot_state_preserves_value(state: PlatformSecureBootState) -> None:
+    """Both ``SecureBootState`` enums (Platform Layer and Host Inventory)
+    are four-value ``StrEnum``s sharing identical string values by
+    deliberate design (see docs/SECURE_BOOT_ADAPTER.md#naming-rationale)
+    - a value-preserving conversion for every one of the four states,
+    including ``UNSUPPORTED``, which the real parser never actually
+    produces today but the translation must still handle correctly.
+    """
+    status = SecureBootStatus(state=state, rawText="")
+
+    result = service._translate_secure_boot_state(status)
+
+    assert result.value == state.value
+    assert isinstance(result, SecureBootState)
+
+
+def test_translate_secure_boot_state_does_not_carry_over_setup_mode_or_raw_text() -> None:
+    """``FirmwareInfo`` has no field for either ``setup_mode`` or
+    ``raw_text`` - this is a deliberate narrowing translation, not a
+    passthrough (Beta M4, mirroring issue #70's/Beta M3's own
+    translation helpers).
+    """
+    status = SecureBootStatus(
+        state=PlatformSecureBootState.ENABLED,
+        setupMode=True,
+        rawText="SecureBoot enabled\nSetupMode enabled\n",
+    )
+
+    result = service._translate_secure_boot_state(status)
+
+    assert result == SecureBootState.ENABLED

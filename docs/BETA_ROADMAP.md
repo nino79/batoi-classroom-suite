@@ -9,7 +9,7 @@
 ## Objectives
 
 1. **Close the gap between architecture and CLI output.** The Host Discovery Orchestrator — fully built, wired, and tested — must be consumed by `bcs inventory` and `bcs doctor` so adapter-sourced facts actually reach the user.
-2. **Fix all observed functional defects.** The empty `storage` array (observed on the first VM run) and the `UNKNOWN`-always Secure Boot collector must be resolved before physical hardware validation can be meaningful.
+2. **Fix all observed functional defects.** The empty `storage` array (observed on the first VM run, resolved — issue #70) and the `UNKNOWN`-always Secure Boot collector (resolved — Beta M4) are fixed; real-hardware confirmation is what physical validation (M5) still needs to do.
 3. **Validate on real LliureX 23 hardware.** A VirtualBox VM proves the CLI installs and runs. Physical NVMe/UEFI machines — especially the target LliureX 23 platform — prove it works where it matters.
 4. **Deliver a stable, documented CLI surface.** All four implemented commands (`version`, `validate`, `inventory`, `doctor`) must produce correct, deterministic output on every required target environment. Error messages must be actionable. Known limitations must be documented, not discovered by testers.
 5. **Retire or document every legacy collector.** By the end of Beta, every legacy `bcs.inventory.collectors` function either routes through the Host Discovery pipeline, or has a documented ADR-backed reason for staying as-is.
@@ -88,37 +88,38 @@ This is the single highest-impact engineering item in Beta. The wiring exists (`
 
 ### M3 — Network Adapter Wiring
 
-**Goal:** The Network Adapter replaces `sysfs`-based `collect_network()` in the Host Discovery composition root. IP addresses appear in `bcs inventory`.
+**Goal:** The Network Adapter replaces `sysfs`-based `collect_network()` in the Host Discovery composition root. IP addresses appear in `bcs inventory`. **Status: code-complete.**
 
 | Item | Effort | Dependencies | Status |
 |---|---|---|---|
-| Complete Network Adapter Parts 2–4 (errors, parser, adapter — already fully implemented per `cli/src/bcs/platform/adapters/network/`). Add dedicated test modules for `errors.py` and `parser.py`. | Small | None (code exists, tests needed) | ⏳ |
-| Narrow `HostDiscoveryAdapters.network` / `HostDiscoverySnapshot.network` typing to the adapter's concrete model type. | Trivial | Part 2–4 tests | ⏳ |
-| Replace `collectors.collect_network` binding in `bcs.app.main()` line 218 with `functools.partial(read_network_interfaces, runner=command_runner)`. | Trivial | M3 completion | ⏳ |
-| Verify `bcs inventory` now includes non-empty `ip_addresses` on E01. | Small | Wiring | ⏳ |
-| Update `NETWORK_ADAPTER.md` status banner, `IMPLEMENTATION_STATUS.md` rows, `KNOWN_LIMITATIONS.md` entry. | Trivial | Wiring | ⏳ |
+| Complete Network Adapter Parts 2–4 (errors, parser, adapter — already fully implemented per `cli/src/bcs/platform/adapters/network/`). Add dedicated test modules for `errors.py` and `parser.py`. | Small | None (code exists, tests needed) | ✅ (100% coverage on all four modules) |
+| Narrow `HostDiscoveryAdapters.network` / `HostDiscoverySnapshot.network` typing to the adapter's concrete model type. | Trivial | Part 2–4 tests | ✅ |
+| Replace `collectors.collect_network` binding in `bcs.app.main()` with `functools.partial(read_network_interfaces, runner=command_runner)`. | Trivial | M3 completion | ✅ |
+| Verify `bcs inventory` now includes non-empty `ip_addresses`. | Small | Wiring | ✅ via unit/integration tests; real E01 hardware verification still pending (M5) |
+| Update `NETWORK_ADAPTER.md` status banner, `IMPLEMENTATION_STATUS.md` rows, `KNOWN_LIMITATIONS.md` entry. | Trivial | Wiring | ✅ |
 
 **Exit criteria:**
-- [ ] `bcs inventory` shows IP addresses in network section.
-- [ ] `bcs doctor --check network` uses `ip` tool data.
-- [ ] Network parts in `cli/tests/fixtures/network/` populated with real captures.
-- [ ] `KNOWN_LIMITATIONS.md` "Network Adapter Implemented but Not Wired" entry updated to reflect completion.
+- [x] `bcs inventory` shows IP addresses in network section (code-complete and test-verified; real-hardware confirmation on E01/E02/E03/E06 remains part of M5).
+- [ ] `bcs doctor --check network` uses `ip` tool data — **out of scope for M3/M4**; `_check_network()` still calls `collect_network()` directly (the full M2b doctor-wiring scope, not attempted here).
+- [ ] Network parts in `cli/tests/fixtures/network/` populated with real captures — still zero-byte placeholders (M6).
+- [x] `KNOWN_LIMITATIONS.md` "Network Adapter Implemented but Not Wired" entry updated to reflect completion (folded into the broader "Host Discovery Orchestrator Not Consumed by Most of `bcs doctor`" entry, Beta M4).
 
 ---
 
-### M4 — Secure Boot Collector Real Implementation
+### M4 — Secure Boot Real Implementation
 
-**Goal:** The legacy `_read_secure_boot_state()` returns a real value instead of `UNKNOWN`.
+**Goal:** `bcs inventory` and `bcs doctor` both report real Secure Boot state instead of `UNKNOWN`. **Status: code-complete.** Implemented the "simpler" of the two originally-considered approaches: routed both consumers through the already-implemented, already-accepted Secure Boot Adapter, rather than teaching the legacy collector to parse the raw EFI variable bytes itself — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md` for the full investigation and rationale. **Did not require the rest of M2b's scope**: `bcs doctor`'s Secure Boot check was fixed with a direct `read_secure_boot_status(runtime.command_runner)` call, never `HostDiscoveryOrchestrator.discover()` (see [ADR-0011 § Alternatives Considered](decisions/0011-host-discovery-orchestrator.md#alternatives-considered)) — `bcs doctor`'s `network`/`storage`/`esp` checks and its `caveats` surfacing remain M2b's own, separate, not-yet-started scope.
 
 | Item | Effort | Dependencies | Status |
 |---|---|---|---|
-| Implement `_read_secure_boot_state()` to parse the `SecureBoot-<GUID>` EFI variable's byte value — or, simpler, route `collect_firmware()` through the Secure Boot adapter when no orchestrator is available. | Small | M2b (doctor wiring) | ⏳ |
-| Add tests covering enabled, disabled, and variable-absent states. | Small | Code change | ⏳ |
-| Update `KNOWN_LIMITATIONS.md` — remove the `UNKNOWN`-always placeholder entry. | Trivial | Code change | ⏳ |
+| Route `bcs inventory` through the Secure Boot Adapter (via the Host Discovery Orchestrator, translate-or-fallback, mirroring `storage`/`network`) instead of parsing efivars directly in the legacy collector. | Small | None — adapter already implemented | ✅ |
+| Route `bcs doctor --check secure-boot` through the Secure Boot Adapter directly, via `runtime.command_runner` — not through the orchestrator. | Small | None | ✅ |
+| Add tests covering enabled, disabled, unsupported-firmware, adapter-unavailable, and parse-error states for both consumers. | Small | Code change | ✅ |
+| Update `KNOWN_LIMITATIONS.md` — remove the `UNKNOWN`-always placeholder entry. | Trivial | Code change | ✅ |
 
 **Exit criteria:**
-- [ ] `bcs inventory` reports `secureBoot: enabled` or `secureBoot: disabled` on real UEFI hardware.
-- [ ] `bcs doctor --check secure-boot` returns `OK` or `WARN` based on real state (never `UNKNOWN`).
+- [x] `bcs inventory` reports `secureBoot: enabled` or `secureBoot: disabled` when the Secure Boot Adapter is available (code-complete and test-verified; real UEFI hardware confirmation on E02/E03/E06 remains part of M5).
+- [x] `bcs doctor --check secure-boot` returns `OK` or `WARN` based on real state, never the old `UNKNOWN`-placeholder message, when the adapter is available (code-complete and test-verified; real-hardware confirmation remains part of M5). Degrades to a descriptive `WARN` (never a crash) when `mokutil` is missing or fails, e.g. on VirtualBox (E01).
 
 ---
 
@@ -148,14 +149,14 @@ This is the single highest-impact engineering item in Beta. The wiring exists (`
 
 | Item | Effort | Dependencies | Status |
 |---|---|---|---|
-| Implement shared `FakeCommandRunner` test double under `cli/tests/` and migrate existing adapter tests. | Medium | None | ⏳ |
+| Implement shared `FakeCommandRunner` test double under `cli/tests/` and migrate existing adapter tests. | Medium | None | ✅ |
 | Capture real hardware/VM output into `cli/tests/fixtures/{firmware,storage,secureboot,filesystem,network}/`, replacing zero-byte placeholders. | Medium | M1 (first captures) | ⏳ |
 | Extend `cli-smoke-test` CI job to run `bcs doctor` and `bcs inventory` in addition to `bcs version`. | Small | None | ⏳ |
 | Narrow `cli/pyproject.toml` Bandit `S603`/`S607` scoping from repository-wide to `bcs.plugins`/`bcs.platform.execution` only. | Trivial | None | ⏳ |
 | Consolidate `FrozenModel`/`FrozenExtensibleModel` into `bcs.model_utils`. | Small | None | ⏳ |
 
 **Exit criteria:**
-- [ ] All adapter test suites use shared `FakeCommandRunner`.
+- [x] All adapter test suites use shared `FakeCommandRunner`.
 - [ ] At least one real fixture file per domain is committed.
 - [ ] CI smoke-test runs `doctor` and `inventory`.
 - [ ] `ruff check .` enforces `S603`/`S607` scope correctly.
@@ -218,7 +219,7 @@ M2a depends on nothing but a small code change.
 M2b depends on M2a (the orchestrator must be passed through first).
 M2c is conceptually independent of M2b but affects the same model.
 M3 is independent of M2 (parallel track).
-M4 interacts with M2b (doctor wiring).
+M4 was originally estimated to interact with M2b (doctor wiring) — in practice it did not: `bcs doctor`'s Secure Boot check was fixed with a small, self-contained direct adapter call (`read_secure_boot_status(runtime.command_runner)`), never `HostDiscoveryOrchestrator.discover()`, so M4 shipped without waiting on M2b's own, still-not-started, broader scope (`network`/`storage`/`esp` checks, `caveats` surfacing). See `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`.
 M5 depends on M1, M2a, M4 being stable.
 M6 is independent (parallel track throughout).
 M7 depends on everything above.
@@ -252,7 +253,7 @@ By the end of Beta, every `bcs.inventory.collectors` function has one of three f
 
 | Collector | Fate | Beta Milestone | Notes |
 |---|---|---|---|
-| `collect_firmware()` | **Kept** — feeds `HostInventory.firmware`. Secure Boot sub-function (`_read_secure_boot_state`) reimplemented or replaced. | M4 | The UEFI-probe half stays; Secure Boot half is replaced by adapter data. |
+| `collect_firmware()` | **Kept** — feeds `HostInventory.firmware`. Secure Boot sub-function (`_read_secure_boot_state`) kept as-is, but now only the *fallback* path (used when the orchestrator/adapter is unavailable). | M4 ✅ | The UEFI-probe half stays as the primary source for `uefi`/`vendor`/`version`; the Secure Boot half is overridden by adapter data (translated `secure_boot`) when available — the collector itself was not rewritten, mirroring `collect_storage()`'s/`collect_network()`'s own precedent. |
 | `collect_storage()` | **Kept** — feeds `HostInventory.storage`. Glob pattern may be extended. | M1 | NVMe-only is spec-compliant (PLAT-005) but SATA detection improves UX. |
 | `collect_efi_system_partition()` | **Kept** — feeds `HostInventory.efiSystemPartition`. No adapter planned. | — | Adequate for current requirements. |
 | `collect_usb_storage()` | **Kept** — feeds `HostInventory.usbStorage`. No adapter planned. | — | Adequate. Schema boundary ambiguity (boot USB appearing in both `storage` and `usbStorage`) tracked as known limitation. |
@@ -270,10 +271,11 @@ By the end of Beta, every `bcs.inventory.collectors` function has one of three f
 Beta is complete when **all** of the following hold:
 
 - [ ] **M1 complete.** Storage array is non-empty on E01. Baseline validation pass logged.
-- [ ] **M2a complete.** `bcs inventory` consumes the Host Discovery Orchestrator.
-- [ ] **M2b complete.** `bcs doctor` consumes the orchestrator for `secure-boot`, `network`, and caveats.
+- [x] **M2a complete (code).** `bcs inventory` consumes the Host Discovery Orchestrator. Real-hardware confirmation is part of M5.
+- [ ] **M2b complete.** `bcs doctor` consumes the orchestrator for `network`/`storage`/`esp` and surfaces `caveats`. (Its Secure Boot check is fixed separately, per M4 below, via a direct adapter call rather than the orchestrator — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`.)
 - [ ] **M2c accepted.** ADR-0008 amendment for Discovery-domain schema folding is either accepted with implementation underway, or explicitly deferred to Phase 1 with documented reasoning.
-- [ ] **M3 complete.** Network Adapter is wired. IP addresses appear in inventory output.
+- [x] **M3 complete (code).** Network Adapter is wired. IP addresses appear in inventory output. Real-hardware confirmation is part of M5; `bcs doctor --check network` and real fixture captures remain out of scope (M2b/M6 respectively).
+- [x] **M4 complete (code).** `bcs inventory` and `bcs doctor` both report real Secure Boot state. Real-hardware confirmation is part of M5.
 - [ ] **M5 complete.** Physical validation on E02, E03, and E06 is logged in `VM_TEST_LOG.md`.
 - [ ] **No P0 or P1 bugs** remain open in the Beta issue tracker.
 - [ ] **`KNOWN_LIMITATIONS.md`** reflects the current state (no stale entries from Alpha).

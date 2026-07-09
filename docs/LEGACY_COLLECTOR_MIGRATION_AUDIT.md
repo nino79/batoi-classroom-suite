@@ -162,17 +162,17 @@ Source code: `service.py:112-148`
 | HostInventory Field | Line | Source with Orchestrator | Source without Orchestrator | HDO Data Available? | Can Migrate Now? |
 |---|---|---|---|---|---|
 | `identity` | 138 | `collectors.collect_identity()` | `collectors.collect_identity()` | ⚠️ Partial (DMI via EFI; MAC via network) | After new HDO slots |
-| `firmware` | 139 | `collectors.collect_firmware()` | `collectors.collect_firmware()` | ✅ `snapshot.firmware_boot_configuration` + `snapshot.secure_boot` | **Yes** — no new adapter needed |
+| `firmware` | 139 | `collectors.collect_firmware()`, with `.secure_boot` overridden from `snapshot.secure_boot` when available (Beta M4) | `collectors.collect_firmware()` | ✅ `snapshot.secure_boot` (consumed, Beta M4); `snapshot.firmware_boot_configuration` still unconsumed | `.secure_boot`: ✅ **Done (Beta M4)**. Rest of `firmware` (`uefi`/`vendor`/`version`, `firmware_boot_configuration`): not migrated — no `HostInventory` field exists for the latter. |
 | `operating_system` | 140 | `collectors.collect_operating_system()` | `collectors.collect_operating_system()` | ❌ None | After new HDO slot |
 | `cpu` | 141 | `snapshot.cpu` (fallback to legacy) | `collectors.collect_cpu()` | ✅ `snapshot.cpu` | ✅ Already done |
 | `memory` | 142 | `snapshot.memory` (fallback to legacy) | `collectors.collect_memory()` | ✅ `snapshot.memory` | ✅ Already done |
 | `efi_system_partition` | 143 | `collectors.collect_efi_system_partition()` | `collectors.collect_efi_system_partition()` | ⚠️ Derived from `snapshot.storage_topology.devices[].partitions` | After new business service |
 | `storage` | 144 | `_translate_storage_devices(snapshot.storage_topology)` (fallback to legacy) | `collectors.collect_storage()` | ✅ `snapshot.storage_topology` | ✅ **Done in #70** |
 | `usb_storage` | 145 | `collectors.collect_usb_storage()` | `collectors.collect_usb_storage()` | ⚠️ Derived from `snapshot.storage_topology.devices[].is_removable` | After new filter function |
-| `network` | 146 | `list(snapshot.network)` | `collectors.collect_network()` | ✅ `snapshot.network` | ✅ Already done |
+| `network` | 146 | `_translate_network_interfaces(snapshot.network)` (fallback to legacy, Beta M3 — was `list(snapshot.network)` pre-M3, before the slot was retyped to the real Network Adapter's model) | `collectors.collect_network()` | ✅ `snapshot.network` | ✅ **Done (Beta M3)** |
 | `tooling` | 147 | `collectors.collect_tooling()` | `collectors.collect_tooling()` | ❌ None | After new HDO slot |
 
-**Summary:** 3 fields already source from HDO (cpu, memory, network); 1 now sources from HDO (#70 storage); 6 still unconditionally source from legacy collectors.
+**Summary:** 2 fields source from HDO with no fallback shape change needed (`cpu`, `memory`); 3 source from HDO via a translate-or-fallback helper (`storage` — #70, `network` — Beta M3, `firmware.secure_boot` — Beta M4); 5 still unconditionally source from legacy collectors.
 
 ---
 
@@ -184,15 +184,15 @@ Source code: `discovery/models.py:93-166`
 |---|---|---|---|---|---|
 | `firmware_boot_configuration` | EFI adapter (`efibootmgr`) | `FirmwareBootConfiguration \| None` | **None** | ❌ | **Dead output.** Adapter runs, data is produced, nobody reads it. |
 | `storage_topology` | Storage adapter (`lsblk`/`blkid`/`findmnt`) | `StorageConfiguration \| None` | `service.py:131` (#70) | ✅ via `HostInventory.storage` | ✅ Consumed |
-| `secure_boot` | Secure Boot adapter (`mokutil`) | `SecureBootStatus \| None` | **None** | ❌ | **Dead output.** Real data is produced (not `UNKNOWN`), nobody reads it. |
+| `secure_boot` | Secure Boot adapter (`mokutil`) | `SecureBootStatus \| None` | `service.py` `_translate_secure_boot_state()` (Beta M4) | ✅ via `HostInventory.firmware.secureBoot` | ✅ Consumed (`bcs inventory`); `bcs doctor` also consumes it, but via a direct adapter call, not this snapshot field |
 | `filesystem` | Filesystem adapter (`df`) | `FilesystemUsageReport \| None` | **None** | ❌ | **Dead output + wasted subprocess.** Adapter runs `df`, data is thrown away. |
-| `network` | `collect_network()` (legacy, NOT Network Adapter) | `tuple[NetworkInterface, ...]` | `service.py:129` | ✅ via `HostInventory.network` | ✅ Consumed (but from legacy, not the real adapter) |
+| `network` | Network adapter (`ip -json addr show`, Beta M3) | `NetworkInterfaceStatus \| None` | `service.py` `_translate_network_interfaces()` | ✅ via `HostInventory.network` | ✅ Consumed (from the real Network Adapter as of Beta M3, not the legacy collector - the legacy `collect_network()` is now only the fallback) |
 | `cpu` | `collect_cpu()` (legacy) | `CpuInfo \| None` | `service.py:127` | ✅ via `HostInventory.cpu` | ✅ Consumed |
 | `memory` | `collect_memory()` (legacy) | `MemoryInfo \| None` | `service.py:128` | ✅ via `HostInventory.memory` | ✅ Consumed |
 | `tpm` | No adapter exists | `object \| None` | **None** | ❌ | Always `None` — expected |
 | `caveats` | Orchestrator (error aggregation) | `tuple[str, ...]` | **None** | ❌ | **Dead output.** Adapter error information is collected but never exposed to the user. |
 
-**Dead output count:** 4 of 9 fields (firmware_boot_configuration, secure_boot, filesystem, caveats) are produced by real subprocess execution and then completely unused.
+**Dead output count:** 2 of 9 fields (`firmware_boot_configuration`, `filesystem`) are produced by real subprocess execution and then completely unused (`caveats` is aggregation-only, not a subprocess call, but is also currently unexposed). `storage_topology`/`network`/`secure_boot` are all consumed as of issue #70/Beta M3/Beta M4.
 
 ---
 
@@ -202,11 +202,13 @@ Source code: `discovery/models.py:93-166`
 
 **Current state:** `commands/doctor.py` imports 6 collectors directly (lines 29–36) and calls them in 7 check functions. `doctor.py` ignores the orchestrator entirely.
 
-**Target state:** `run_doctor()` calls `runtime.host_discovery_orchestrator.discover()` once, stores the snapshot, and every `_check_*` function reads from it.
+**Target state, as originally proposed here:** `run_doctor()` calls `runtime.host_discovery_orchestrator.discover()` once, stores the snapshot, and every `_check_*` function reads from it.
+
+**Correction (Beta M4):** the proposal above conflicts with [ADR-0011 § Alternatives Considered](decisions/0011-host-discovery-orchestrator.md#alternatives-considered), which explicitly rejected exactly this shape for `bcs doctor` — a single check must never pay for, or be blocked by, an unrelated domain's adapter call, which a shared one-`discover()`-per-invocation sweep would violate. `_check_secure_boot()` was fixed (Beta M4) using the alternative the ADR does sanction instead: each check reads its own single collector/adapter directly (`read_secure_boot_status(runtime.command_runner)`), not a shared snapshot. This "Migration 1" section's general proposal needs reconciling with that ADR before any further check is migrated this way — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md` for the investigation that surfaced this.
 
 **Dependencies:** None (orchestrator is already built and wired).
 
-**Complexity:** Medium — 7 checks to refactor.
+**Complexity:** Medium — 7 checks to refactor (6 remaining; `secure-boot` done).
 
 **Risk:** Medium — check logic must remain behaviourally identical.
 
@@ -216,8 +218,12 @@ Source code: `discovery/models.py:93-166`
 +-------------------------------+---------------------+---------------------+
 | _check_firmware()             | collect_firmware()  | snapshot.firmware_  |
 |                               |                     | boot_configuration  |
-| _check_secure_boot()          | collect_firmware()  | snapshot.secure_boot|
-|                               | (reads /sys twice!) |                     |
+| _check_secure_boot()          | ✅ DONE (M4): read_ | read_secure_boot_   |
+|                               | secure_boot_status()| status(runtime.     |
+|                               | via command_runner  | command_runner) -   |
+|                               | directly, not the   | already the Future  |
+|                               | snapshot (see note  | Source shown here   |
+|                               | above)              |                     |
 | _check_storage()              | collect_storage()   | snapshot.storage_   |
 |                               |                     | topology.devices    |
 | _check_esp()                  | collect_efi_system_ | snapshot.storage_   |
@@ -362,18 +368,18 @@ Zero-dependency independent:
 | Debt | Location | Impact |
 |---|---|---|
 | **Filesystem adapter runs but its output is discarded** | `app.py:217` + `discovery/models.py:138` | Wasted subprocess (`df`) on every `bcs` invocation. Produces `HostDiscoverySnapshot.filesystem` that no code reads. |
-| **Secure Boot adapter runs but its output is discarded** | `app.py:216` + `discovery/models.py:133` | Wasted subprocess (`mokutil`) on every `bcs` invocation. Real Secure Boot state is collected but never reaches the user — `collect_firmware()` always returns `UNKNOWN`. |
-| **`doctor.py` bypasses orchestrator entirely** | `commands/doctor.py:29-36,50-121` | `bcs doctor` and `bcs inventory` read different data sources. The docstring at line 12 claims they cannot disagree, but this is false. |
+| ~~**Secure Boot adapter runs but its output is discarded**~~ **Resolved (Beta M4)** | `app.py:216` (composition root) | Real Secure Boot state now reaches both `bcs inventory` (`HostInventory.firmware.secureBoot`, via the orchestrator) and `bcs doctor` (`_check_secure_boot()`, via a direct `read_secure_boot_status(runtime.command_runner)` call) — see `docs/SECURE_BOOT_IMPLEMENTATION_PLAN.md`. |
+| **`doctor.py` mostly bypasses orchestrator/adapters** | `commands/doctor.py:29-49,106-121` | `bcs doctor` and `bcs inventory` read different data sources for `storage`/`esp`/`network`/`usb-storage`/`tooling`/`firmware`. The `secure-boot` check no longer has this problem (Beta M4, reads the same underlying adapter `bcs inventory` does, just via a separate call) — the module docstring was corrected to no longer claim uniform agreement across every check. |
 | **Caveats are collected but never exposed** | `discovery/orchestrator.py:93-102` + `discovery/models.py:158-166` | If an adapter fails, the error is recorded in `caveats` but no command displays it. Silent failures. |
 
 ### MEDIUM
 
 | Debt | Location | Impact |
 |---|---|---|
-| **Network Adapter implemented but not wired** | `bcs/platform/adapters/network/` | 4 files, ~450 lines of tested code that is never loaded at runtime. IP addresses remain empty. |
+| ~~**Network Adapter implemented but not wired**~~ **Resolved (Beta M3)** | `bcs/platform/adapters/network/` | Wired into the composition root's `network` slot; `bcs inventory` reports real IP addresses via the Host Discovery Orchestrator, falling back to the legacy collector when unavailable. |
 | **Duplicate null-MAC constant** | `collectors.py:59` and `network/parser.py:40` | Both define `_NULL_MAC = "00:00:00:00:00:00"` independently. |
 | **`_read_text()` is a generic utility trapped in `collectors.py`** | `collectors.py:70-76` | Cannot be imported by platform adapters. If the Filesystem adapter (or any future adapter) needs it, the utility must be extracted or duplicated. |
-| **Legacy `_read_secure_boot_state()` always returns `UNKNOWN`** | `collectors.py:86-92` | This is a documented placeholder. The real implementation exists in the Secure Boot adapter but is not connected. |
+| **Legacy `_read_secure_boot_state()` always returns `UNKNOWN`** | `collectors.py:86-92` | Still true of the function itself (unchanged) - but it is now only the *fallback* path (Beta M4), used when the Secure Boot Adapter is unavailable; the primary path reports real state. |
 | **`collect_storage()` still exists as dead fallback** | `collectors.py:95-102` | After doctor migrates, this function will only be called when the storage adapter slot is unset or fails — a rare edge case that nonetheless requires maintaining 380 lines of collector code. |
 
 ### LOW
@@ -429,6 +435,7 @@ Sprint 4 (cleanup)
   Keep:   collect_operating_system, collect_cpu, collect_memory, collect_tooling
   Fix:    Duplicate _NULL_MAC constant
   Fix:    Filesystem adapter dead output (remove from composition root or consume)
-  Fix:    Secure Boot adapter dead output (consumed via Migration 2)
+  Done:   Secure Boot adapter dead output — consumed directly (Beta M4, not via Migration 2's
+          originally-proposed shared-snapshot approach; see § 4 Migration 1's correction note)
   Fix:    Caveats exposed in CLI output
 ```
