@@ -16,6 +16,16 @@ This directory contains the detailed documentation for Batoi Classroom Suite (BC
 | [guides/](guides/) | Practical, contributor-facing guides: getting started, FAQ. |
 | [glossary.md](glossary.md) | Definitions for domain terms (LliureX, UEFI, ESP, Clonezilla, etc.) used throughout the docs. |
 | [repository-organization.md](repository-organization.md) | Canonical explanation of the whole repository's folder structure. |
+| [VM_DEMO_GUIDE.md](VM_DEMO_GUIDE.md) | Step-by-step guide for running `bcs` on a fresh Ubuntu 24.04 VirtualBox VM — VM creation, OS install, BCS setup, and demo commands. |
+| [VM_CHECKLIST.md](VM_CHECKLIST.md) | Printable pre-demo and during-demo verification checklist for every working `bcs` command, edge case, and cleanup step. |
+| [MVP_DEMO_PLAN.md](MVP_DEMO_PLAN.md) | Scripted 20-25 minute demo presentation covering context, install, basic commands, validate, inventory, doctor, architecture, and stubs. |
+| [HARDWARE_MATRIX.md](HARDWARE_MATRIX.md) | Hardware/software requirements and compatibility for every Platform Layer adapter and Host Inventory collector, including VM support. |
+| [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | Documented, accepted gaps and limitations in the Phase 0 CLI implementation, each linked to its owning design doc or ADR. |
+| [VM_FIRST_BOOT.md](VM_FIRST_BOOT.md) | Protocol for creating a Ubuntu 24.04 VM from scratch in VirtualBox — install steps, EFI/NVMe config, network, and initial snapshot. |
+| [VM_INSTALLATION.md](VM_INSTALLATION.md) | Exact copy-paste commands to install `bcs` on a fresh Ubuntu 24.04 VM — apt, clone, venv, pip install. |
+| [VM_VALIDATION.md](VM_VALIDATION.md) | Structured validation checklist with 27 test cases — each with objective, command, expected result, and PASS/FAIL fields. |
+| [VM_BUG_REPORT_TEMPLATE.md](VM_BUG_REPORT_TEMPLATE.md) | Bug report template for issues found during VM validation — hardware, VirtualBox, Ubuntu versions, command, output, logs, priority. |
+| [VM_TEST_LOG.md](VM_TEST_LOG.md) | Empty test journal for recording validation sessions, test results, and bugs found. |
 | [CONFIGURATION.md](CONFIGURATION.md) | The unified YAML configuration format (`config/schema.yaml`) that drives Boot Manager, Builder, and Deploy. |
 | [CLI.md](CLI.md) | Complete design of `bcs`, the command-line interface into all three components. |
 | [HOST_INVENTORY.md](HOST_INVENTORY.md) | Design (see [ADR-0008](decisions/0008-host-inventory-ports-and-adapters.md), Accepted) for the Host Inventory subsystem — the single source of truth describing the current machine, consumed by `bcs doctor`, `bcs inventory`, and future Boot Manager/Builder/Deploy/REST API/Web UI. |

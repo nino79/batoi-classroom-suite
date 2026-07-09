@@ -2,7 +2,7 @@
 
 This is the implementation of `bcs`, the Batoi Classroom Suite command-line interface. The design this code implements is documented in [`../docs/CLI.md`](../docs/CLI.md); the decision to implement it in Python (superseding the Bash-based plan in [ADR-0004](../docs/decisions/0004-bash-as-primary-implementation-language.md)/[ADR-0006](../docs/decisions/0006-bcs-unified-cli-architecture.md)) is recorded in [ADR-0007](../docs/decisions/0007-python-for-the-bcs-cli.md).
 
-This implementation phase covers **only the CLI framework**: global options, logging, configuration loading/validation, the Host Inventory subsystem, and the `version`, `doctor`, `inventory`, and `validate` commands (with placeholder check logic where noted). `build`, `install`, `deploy`, `backup`, `restore`, `update`, and `config` are registered so `bcs --help` reflects the full command surface, but each is a stub that reports it isn't implemented yet — no Boot Manager, Builder, or Deploy logic exists in this package.
+This implementation phase covers **only the CLI framework**: global options, logging, configuration loading/validation, the Host Inventory subsystem, and the `version`, `doctor`, `inventory`, and `validate` commands. `build`, `install`, `deploy`, `backup`, `restore`, `update`, and `config` are registered so `bcs --help` reflects the full command surface, but each is a stub that reports it isn't implemented yet — no Boot Manager, Builder, or Deploy logic exists in this package.
 
 ## Requirements
 
@@ -12,17 +12,17 @@ This implementation phase covers **only the CLI framework**: global options, log
 ## Development Setup
 
 On a clean Ubuntu 24.04 machine, the `venv` module is a separate package —
-without it, `python3.12 -m venv` fails with `ensurepip is not available`:
+without it, `python3 -m venv` fails with `ensurepip is not available`:
 
 ```bash
-sudo apt update && sudo apt install -y python3.12-venv git
+sudo apt update && sudo apt install -y python3-venv git
 ```
 
 Then, from a clone of this repository:
 
 ```bash
 cd cli
-python3.12 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate  # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
 ```
@@ -38,6 +38,23 @@ bcs version
 bcs doctor
 bcs inventory --output json
 bcs validate ../config/examples/default.yaml
+```
+
+## Running in a VM (VirtualBox / Ubuntu 24.04)
+
+`bcs doctor`'s `firmware`/`esp`/`storage`/`tooling` checks report real
+platform prerequisites (`PLAT-003`–`PLAT-005`), not bugs — a default
+VirtualBox VM (BIOS boot, SATA disk) will legitimately fail them; the VM
+needs EFI enabled and an NVMe controller instead. See
+[`docs/VM_DEMO_GUIDE.md`](../docs/VM_DEMO_GUIDE.md) for the exact
+`VBoxManage`/OS-install steps and [`docs/VM_CHECKLIST.md`](../docs/VM_CHECKLIST.md)
+for a pre-demo verification checklist.
+
+To resolve a `ClassroomConfig` once instead of passing `--config` on every
+command:
+
+```bash
+export BCS_CONFIG="$(pwd)/../config/examples/default.yaml"
 ```
 
 ## Quality Gates
