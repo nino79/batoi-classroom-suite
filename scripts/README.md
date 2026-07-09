@@ -1,12 +1,18 @@
 # scripts/
 
-Maintainer and CI helper scripts (repository housekeeping — not BCS component implementation, which lives in [boot-manager/](../boot-manager/), [builder/](../builder/), and [deploy/](../deploy/)).
+Maintainer, CI helper, and Beta validation scripts (repository housekeeping — not BCS component implementation, which lives in [boot-manager/](../boot-manager/), [builder/](../builder/), and [deploy/](../deploy/)).
 
-## Status
+## Contents
 
-Empty placeholder. Per [AGENTS.md](../AGENTS.md) and the current [documentation-only phase](../ROADMAP.md), no scripts are implemented yet. This directory exists so the repository's intended shape is visible from the start, and so future automation (docs linting, ADR index checks, label sync) has an obvious home.
+| Script | Purpose |
+|--------|---------|
+| `validate-beta.sh` | Orchestrate Beta validation — environment capture, CLI command execution, report generation. |
+| `verify-environment.sh` | Collect host environment metadata (kernel, distribution, hypervisor, tools) as JSON. |
+| `collect-artifacts.sh` | Archive all validation reports into a timestamped directory. |
 
-## Anticipated Contents
+See [`docs/BETA_VALIDATION_AUTOMATION.md`](../docs/BETA_VALIDATION_AUTOMATION.md) for the full design, workflow, and CI integration guide.
+
+## Future
 
 - Documentation consistency checks (e.g., verifying cross-references between `SPECIFICATION.md` and `docs/specifications/*.md` stay in sync).
 - `.github/LABELS.md` → GitHub label sync tooling.

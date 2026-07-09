@@ -22,12 +22,9 @@ about any adapter's own internals is touched or mocked.
 from __future__ import annotations
 
 import functools
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
+from tests.fake_command_runner import FakeCommandRunner, build_command_result
 from typer.testing import CliRunner
 
 from bcs import app as app_module
@@ -44,82 +41,6 @@ from bcs.platform.adapters.secureboot.adapter import read_secure_boot_status
 from bcs.platform.adapters.secureboot.models import SecureBootState, SecureBootStatus
 from bcs.platform.adapters.storage.adapter import read_storage_topology
 from bcs.platform.adapters.storage.models import StorageConfiguration
-from bcs.platform.errors import CommandNotFoundError
-
-# ---------------------------------------------------------------------------
-# A single, shared, multi-tool FakeCommandRunner - keyed by tool name
-# (command[0]), mirroring test_platform_adapters_storage_adapter.py's own
-# FakeCommandRunner exactly, generalised to serve efibootmgr/lsblk/blkid/
-# findmnt/mokutil simultaneously, the same way bcs.app.main() shares one
-# real SubprocessCommandRunner across efi/storage/secure_boot.
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class FakeCommandResult:
-    """A minimal stand-in for ``CommandResult`` used in these tests."""
-
-    command: tuple[str, ...]
-    stdout: str
-    stderr: str
-    exit_code: int
-    duration: float
-    started_at: datetime
-    finished_at: datetime
-    working_directory: str | None = None
-    timed_out: bool = False
-
-    def to_result(self) -> MagicMock:
-        m = MagicMock()
-        m.command = self.command
-        m.stdout = self.stdout
-        m.stderr = self.stderr
-        m.exit_code = self.exit_code
-        m.duration = self.duration
-        m.started_at = self.started_at
-        m.finished_at = self.finished_at
-        m.working_directory = self.working_directory
-        m.timed_out = self.timed_out
-        return m
-
-
-@dataclass
-class FakeCommandRunner:
-    """A configurable ``CommandRunner`` stand-in, keyed by tool name
-    (``command[0]``) - shared across every tool-based adapter in one
-    pipeline run, exactly as the real ``SubprocessCommandRunner``
-    instance is in ``bcs.app.main()``.
-    """
-
-    results: dict[str, FakeCommandResult] = field(default_factory=dict)
-    not_found_tools: frozenset[str] = frozenset()
-    calls: list[dict[str, Any]] = field(default_factory=list)
-
-    def run(  # noqa: PLR0913 - mirrors the CommandRunner Protocol's own signature exactly
-        self,
-        command: Any,
-        *,
-        timeout_seconds: Any = None,
-        check: bool = False,
-        cwd: Any = None,
-        env: Any = None,
-        input_text: Any = None,
-    ) -> MagicMock:
-        tool = command[0]
-        self.calls.append(
-            {
-                "command": command,
-                "timeout_seconds": timeout_seconds,
-                "check": check,
-                "cwd": cwd,
-                "env": env,
-                "input_text": input_text,
-            }
-        )
-        if tool in self.not_found_tools:
-            raise CommandNotFoundError(f"{tool} not found", executable=tool)
-        return self.results[tool].to_result()
-
 
 # ---------------------------------------------------------------------------
 # Realistic, minimal-but-valid tool output for each of the three real,
@@ -166,29 +87,16 @@ _VALID_IP = (
 )
 
 
-def _make_result(*, stdout: str = "", stderr: str = "", exit_code: int = 0) -> FakeCommandResult:
-    now = datetime.now(tz=UTC)
-    return FakeCommandResult(
-        command=("tool",),
-        stdout=stdout,
-        stderr=stderr,
-        exit_code=exit_code,
-        duration=0.1,
-        started_at=now,
-        finished_at=now,
-    )
-
-
 def _fully_successful_runner() -> FakeCommandRunner:
     return FakeCommandRunner(
         results={
-            "efibootmgr": _make_result(stdout=_VALID_EFIBOOTMGR),
-            "lsblk": _make_result(stdout=_VALID_LSBLK),
-            "blkid": _make_result(stdout=_VALID_BLKID),
-            "findmnt": _make_result(stdout=_VALID_FINDMNT),
-            "mokutil": _make_result(stdout=_VALID_MOKUTIL),
-            "df": _make_result(stdout=_VALID_DF),
-            "ip": _make_result(stdout=_VALID_IP),
+            "efibootmgr": build_command_result(stdout=_VALID_EFIBOOTMGR),
+            "lsblk": build_command_result(stdout=_VALID_LSBLK),
+            "blkid": build_command_result(stdout=_VALID_BLKID),
+            "findmnt": build_command_result(stdout=_VALID_FINDMNT),
+            "mokutil": build_command_result(stdout=_VALID_MOKUTIL),
+            "df": build_command_result(stdout=_VALID_DF),
+            "ip": build_command_result(stdout=_VALID_IP),
         }
     )
 
@@ -283,12 +191,12 @@ def test_one_adapter_failing_isolates_into_one_caveat_others_unaffected() -> Non
     """
     runner = FakeCommandRunner(
         results={
-            "efibootmgr": _make_result(stdout=_VALID_EFIBOOTMGR),
-            "lsblk": _make_result(stdout=_VALID_LSBLK),
-            "blkid": _make_result(stdout=_VALID_BLKID),
-            "findmnt": _make_result(stdout=_VALID_FINDMNT),
-            "df": _make_result(stdout=_VALID_DF),
-            "ip": _make_result(stdout=_VALID_IP),
+            "efibootmgr": build_command_result(stdout=_VALID_EFIBOOTMGR),
+            "lsblk": build_command_result(stdout=_VALID_LSBLK),
+            "blkid": build_command_result(stdout=_VALID_BLKID),
+            "findmnt": build_command_result(stdout=_VALID_FINDMNT),
+            "df": build_command_result(stdout=_VALID_DF),
+            "ip": build_command_result(stdout=_VALID_IP),
         },
         not_found_tools=frozenset({"mokutil"}),
     )
@@ -315,13 +223,13 @@ def test_unavailable_stderr_produces_the_domain_specific_exception_in_the_caveat
     """
     runner = FakeCommandRunner(
         results={
-            "efibootmgr": _make_result(stdout=_VALID_EFIBOOTMGR),
-            "lsblk": _make_result(stdout=_VALID_LSBLK),
-            "blkid": _make_result(stdout=_VALID_BLKID),
-            "findmnt": _make_result(stdout=_VALID_FINDMNT),
-            "mokutil": _make_result(stderr="Permission denied", exit_code=1),
-            "df": _make_result(stdout=_VALID_DF),
-            "ip": _make_result(stdout=_VALID_IP),
+            "efibootmgr": build_command_result(stdout=_VALID_EFIBOOTMGR),
+            "lsblk": build_command_result(stdout=_VALID_LSBLK),
+            "blkid": build_command_result(stdout=_VALID_BLKID),
+            "findmnt": build_command_result(stdout=_VALID_FINDMNT),
+            "mokutil": build_command_result(stderr="Permission denied", exit_code=1),
+            "df": build_command_result(stdout=_VALID_DF),
+            "ip": build_command_result(stdout=_VALID_IP),
         },
     )
     snapshot = HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
@@ -340,12 +248,12 @@ def test_filesystem_failure_isolates_into_its_own_caveat() -> None:
     """
     runner = FakeCommandRunner(
         results={
-            "efibootmgr": _make_result(stdout=_VALID_EFIBOOTMGR),
-            "lsblk": _make_result(stdout=_VALID_LSBLK),
-            "blkid": _make_result(stdout=_VALID_BLKID),
-            "findmnt": _make_result(stdout=_VALID_FINDMNT),
-            "mokutil": _make_result(stdout=_VALID_MOKUTIL),
-            "ip": _make_result(stdout=_VALID_IP),
+            "efibootmgr": build_command_result(stdout=_VALID_EFIBOOTMGR),
+            "lsblk": build_command_result(stdout=_VALID_LSBLK),
+            "blkid": build_command_result(stdout=_VALID_BLKID),
+            "findmnt": build_command_result(stdout=_VALID_FINDMNT),
+            "mokutil": build_command_result(stdout=_VALID_MOKUTIL),
+            "ip": build_command_result(stdout=_VALID_IP),
         },
         not_found_tools=frozenset({"df"}),
     )
@@ -372,17 +280,17 @@ def test_filesystem_partial_failure_is_not_a_caveat_but_raw_stderr_carries_it() 
     """
     runner = FakeCommandRunner(
         results={
-            "efibootmgr": _make_result(stdout=_VALID_EFIBOOTMGR),
-            "lsblk": _make_result(stdout=_VALID_LSBLK),
-            "blkid": _make_result(stdout=_VALID_BLKID),
-            "findmnt": _make_result(stdout=_VALID_FINDMNT),
-            "mokutil": _make_result(stdout=_VALID_MOKUTIL),
-            "df": _make_result(
+            "efibootmgr": build_command_result(stdout=_VALID_EFIBOOTMGR),
+            "lsblk": build_command_result(stdout=_VALID_LSBLK),
+            "blkid": build_command_result(stdout=_VALID_BLKID),
+            "findmnt": build_command_result(stdout=_VALID_FINDMNT),
+            "mokutil": build_command_result(stdout=_VALID_MOKUTIL),
+            "df": build_command_result(
                 stdout=_VALID_DF,
                 stderr="df: '/mnt/stale': Stale file handle",
                 exit_code=1,
             ),
-            "ip": _make_result(stdout=_VALID_IP),
+            "ip": build_command_result(stdout=_VALID_IP),
         },
     )
     snapshot = HostDiscoveryOrchestrator(_build_adapters(runner)).discover()
@@ -401,11 +309,11 @@ def test_multiple_independent_failures_each_get_their_own_caveat_in_order() -> N
     """
     runner = FakeCommandRunner(
         results={
-            "lsblk": _make_result(stdout=_VALID_LSBLK),
-            "blkid": _make_result(stdout=_VALID_BLKID),
-            "findmnt": _make_result(stdout=_VALID_FINDMNT),
-            "df": _make_result(stdout=_VALID_DF),
-            "ip": _make_result(stdout=_VALID_IP),
+            "lsblk": build_command_result(stdout=_VALID_LSBLK),
+            "blkid": build_command_result(stdout=_VALID_BLKID),
+            "findmnt": build_command_result(stdout=_VALID_FINDMNT),
+            "df": build_command_result(stdout=_VALID_DF),
+            "ip": build_command_result(stdout=_VALID_IP),
         },
         not_found_tools=frozenset({"efibootmgr", "mokutil"}),
     )

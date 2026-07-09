@@ -28,12 +28,8 @@ These tests verify that ``read_storage_topology``:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import MagicMock
-
 import pytest
+from tests.fake_command_runner import FakeCommandRunner, build_command_result
 
 from bcs.platform.adapters.storage.adapter import read_storage_topology
 from bcs.platform.adapters.storage.errors import (
@@ -44,88 +40,6 @@ from bcs.platform.adapters.storage.errors import (
 from bcs.platform.adapters.storage.models import StorageConfiguration
 from bcs.platform.errors import CommandNotFoundError, CommandTimeoutError
 from bcs.platform.execution import CommandRunner
-
-# ---------------------------------------------------------------------------
-# Fake CommandRunner
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class FakeCommandResult:
-    """A minimal stand-in for ``CommandResult`` used in these tests."""
-
-    command: tuple[str, ...]
-    stdout: str
-    stderr: str
-    exit_code: int
-    duration: float
-    started_at: datetime
-    finished_at: datetime
-    working_directory: str | None = None
-    timed_out: bool = False
-
-    def to_result(self) -> MagicMock:
-        m = MagicMock()
-        m.command = self.command
-        m.stdout = self.stdout
-        m.stderr = self.stderr
-        m.exit_code = self.exit_code
-        m.duration = self.duration
-        m.started_at = self.started_at
-        m.finished_at = self.finished_at
-        m.working_directory = self.working_directory
-        m.timed_out = self.timed_out
-        return m
-
-
-@dataclass
-class FakeCommandRunner:
-    """A configurable ``CommandRunner`` stand-in, keyed by tool name
-    (``command[0]``).
-
-    ``results`` maps a tool name to the canned ``FakeCommandResult``
-    returned when it is invoked. ``not_found_tools``/``timeout_tools``
-    name tools that raise ``CommandNotFoundError``/``CommandTimeoutError``
-    instead. Every call is recorded in ``calls`` regardless of outcome,
-    so tests can assert exactly what was (and was not) invoked.
-    """
-
-    results: dict[str, FakeCommandResult] = field(default_factory=dict)
-    not_found_tools: frozenset[str] = frozenset()
-    timeout_tools: frozenset[str] = frozenset()
-    calls: list[dict[str, Any]] = field(default_factory=list)
-
-    def run(  # noqa: PLR0913 - mirrors the CommandRunner Protocol's own signature exactly
-        self,
-        command: Any,
-        *,
-        timeout_seconds: Any = None,
-        check: bool = False,
-        cwd: Any = None,
-        env: Any = None,
-        input_text: Any = None,
-    ) -> MagicMock:
-        tool = command[0]
-        self.calls.append(
-            {
-                "command": command,
-                "timeout_seconds": timeout_seconds,
-                "check": check,
-                "cwd": cwd,
-                "env": env,
-                "input_text": input_text,
-            }
-        )
-        # Check not-found / timeout BEFORE touching self.results, so that
-        # a FakeCommandRunner configured with only not_found_tools (empty
-        # results) correctly raises instead of KeyError-ing on the first
-        # tool that *is* in results.
-        if tool in self.not_found_tools:
-            raise CommandNotFoundError(f"{tool} not found", executable=tool)
-        if tool in self.timeout_tools:
-            raise CommandTimeoutError(f"{tool} timed out", partial_result=MagicMock())
-        return self.results[tool].to_result()
-
 
 # ---------------------------------------------------------------------------
 # Valid output used across tests - minimal, not realistic; parser
@@ -149,25 +63,12 @@ _VALID_FINDMNT = (
 )
 
 
-def _make_result(*, stdout: str = "", stderr: str = "", exit_code: int = 0) -> FakeCommandResult:
-    now = datetime.now(tz=UTC)
-    return FakeCommandResult(
-        command=("tool",),
-        stdout=stdout,
-        stderr=stderr,
-        exit_code=exit_code,
-        duration=0.1,
-        started_at=now,
-        finished_at=now,
-    )
-
-
 def _successful_runner() -> FakeCommandRunner:
     return FakeCommandRunner(
         results={
-            "lsblk": _make_result(stdout=_VALID_LSBLK),
-            "blkid": _make_result(stdout=_VALID_BLKID),
-            "findmnt": _make_result(stdout=_VALID_FINDMNT),
+            "lsblk": build_command_result(stdout=_VALID_LSBLK),
+            "blkid": build_command_result(stdout=_VALID_BLKID),
+            "findmnt": build_command_result(stdout=_VALID_FINDMNT),
         }
     )
 
@@ -286,11 +187,11 @@ def test_remaining_tools_are_not_run_after_a_failure() -> None:
 @pytest.mark.parametrize("failing_tool", ["lsblk", "blkid", "findmnt"])
 def test_unavailable_error_for_recognised_stderr_patterns(failing_tool: str, stderr: str) -> None:
     results = {
-        "lsblk": _make_result(stdout=_VALID_LSBLK),
-        "blkid": _make_result(stdout=_VALID_BLKID),
-        "findmnt": _make_result(stdout=_VALID_FINDMNT),
+        "lsblk": build_command_result(stdout=_VALID_LSBLK),
+        "blkid": build_command_result(stdout=_VALID_BLKID),
+        "findmnt": build_command_result(stdout=_VALID_FINDMNT),
     }
-    results[failing_tool] = _make_result(stderr=stderr, exit_code=1)
+    results[failing_tool] = build_command_result(stderr=stderr, exit_code=1)
     runner = FakeCommandRunner(results=results)
 
     with pytest.raises(StorageUnavailableError) as exc_info:
@@ -303,11 +204,11 @@ def test_unavailable_error_for_recognised_stderr_patterns(failing_tool: str, std
 @pytest.mark.parametrize("failing_tool", ["lsblk", "blkid", "findmnt"])
 def test_generic_error_for_unrecognised_stderr(failing_tool: str) -> None:
     results = {
-        "lsblk": _make_result(stdout=_VALID_LSBLK),
-        "blkid": _make_result(stdout=_VALID_BLKID),
-        "findmnt": _make_result(stdout=_VALID_FINDMNT),
+        "lsblk": build_command_result(stdout=_VALID_LSBLK),
+        "blkid": build_command_result(stdout=_VALID_BLKID),
+        "findmnt": build_command_result(stdout=_VALID_FINDMNT),
     }
-    results[failing_tool] = _make_result(stderr="something went wrong", exit_code=2)
+    results[failing_tool] = build_command_result(stderr="something went wrong", exit_code=2)
     runner = FakeCommandRunner(results=results)
 
     with pytest.raises(StorageError) as exc_info:
@@ -327,9 +228,9 @@ def test_generic_error_for_unrecognised_stderr(failing_tool: str) -> None:
 def test_parse_error_when_output_is_unrecognisable() -> None:
     runner = FakeCommandRunner(
         results={
-            "lsblk": _make_result(stdout="not valid json"),
-            "blkid": _make_result(stdout=_VALID_BLKID),
-            "findmnt": _make_result(stdout=_VALID_FINDMNT),
+            "lsblk": build_command_result(stdout="not valid json"),
+            "blkid": build_command_result(stdout=_VALID_BLKID),
+            "findmnt": build_command_result(stdout=_VALID_FINDMNT),
         }
     )
 

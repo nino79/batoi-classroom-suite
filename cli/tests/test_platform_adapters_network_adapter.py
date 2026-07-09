@@ -22,12 +22,8 @@ mirroring ``test_platform_adapters_secureboot_adapter.py``'s own style.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import MagicMock
-
 import pytest
+from tests.fake_command_runner import FakeCommandRunner, build_command_result
 
 from bcs.platform.adapters.network.adapter import read_network_interfaces
 from bcs.platform.adapters.network.errors import (
@@ -39,83 +35,6 @@ from bcs.platform.adapters.network.models import NetworkInterfaceStatus
 from bcs.platform.errors import CommandNotFoundError, CommandTimeoutError
 from bcs.platform.execution import CommandRunner
 
-# ---------------------------------------------------------------------------
-# Fake CommandRunner
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class FakeCommandResult:
-    """A minimal stand-in for ``CommandResult`` used in these tests."""
-
-    command: tuple[str, ...]
-    stdout: str
-    stderr: str
-    exit_code: int
-    duration: float
-    started_at: datetime
-    finished_at: datetime
-    working_directory: str | None = None
-    timed_out: bool = False
-
-    def to_result(self) -> MagicMock:
-        m = MagicMock()
-        m.command = self.command
-        m.stdout = self.stdout
-        m.stderr = self.stderr
-        m.exit_code = self.exit_code
-        m.duration = self.duration
-        m.started_at = self.started_at
-        m.finished_at = self.finished_at
-        m.working_directory = self.working_directory
-        m.timed_out = self.timed_out
-        return m
-
-
-@dataclass
-class FakeCommandRunner:
-    """A configurable ``CommandRunner`` stand-in for testing.
-
-    Set ``raise_not_found`` or ``raise_timeout`` to simulate those
-    runner-level exceptions. Otherwise ``result`` (a
-    ``FakeCommandResult``) is returned on every call.
-    """
-
-    result: FakeCommandResult | None = None
-    raise_not_found: bool = False
-    raise_timeout: bool = False
-    calls: list[dict[str, Any]] = field(default_factory=list)
-
-    def run(  # noqa: PLR0913 - mirrors CommandRunner.run()'s own protocol signature
-        self,
-        command: Any,
-        *,
-        timeout_seconds: Any = None,
-        check: bool = False,
-        cwd: Any = None,
-        env: Any = None,
-        input_text: Any = None,
-    ) -> MagicMock:
-        self.calls.append(
-            {
-                "command": command,
-                "timeout_seconds": timeout_seconds,
-                "check": check,
-                "cwd": cwd,
-                "env": env,
-                "input_text": input_text,
-            }
-        )
-        if self.raise_not_found:
-            raise CommandNotFoundError("ip not found", executable="ip")
-        if self.raise_timeout:
-            raise CommandTimeoutError(
-                "ip timed out",
-                partial_result=MagicMock(),
-            )
-        return self.result.to_result()
-
-
 _VALID_ETHERNET_UP = (
     '[{"ifname": "eth0", "flags": ["BROADCAST", "MULTICAST", "UP", "LOWER_UP"], '
     '"address": "52:54:00:12:34:56", '
@@ -123,31 +42,19 @@ _VALID_ETHERNET_UP = (
 )
 
 
-def _make_result(
-    *,
-    stdout: str = "",
-    stderr: str = "",
-    exit_code: int = 0,
-) -> FakeCommandResult:
-    now = datetime.now(tz=UTC)
-    return FakeCommandResult(
-        command=("ip", "-json", "addr", "show"),
-        stdout=stdout,
-        stderr=stderr,
-        exit_code=exit_code,
-        duration=0.1,
-        started_at=now,
-        finished_at=now,
-    )
-
-
 # ---------------------------------------------------------------------------
 # Success path
 # ---------------------------------------------------------------------------
 
 
+def _ip_result(**kw: str | int) -> FakeCommandRunner:
+    return FakeCommandRunner(
+        result=build_command_result(command=("ip",), **kw)  # type: ignore[arg-type]
+    )
+
+
 def test_calls_correct_command_with_locale_env() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    runner = _ip_result(stdout=_VALID_ETHERNET_UP)
     read_network_interfaces(runner)
 
     assert len(runner.calls) == 1
@@ -162,28 +69,28 @@ def test_calls_correct_command_with_locale_env() -> None:
 
 
 def test_default_timeout_is_five_seconds() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    runner = _ip_result(stdout=_VALID_ETHERNET_UP)
     read_network_interfaces(runner)
 
     assert runner.calls[0]["timeout_seconds"] == 5.0
 
 
 def test_forwards_timeout_seconds() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    runner = _ip_result(stdout=_VALID_ETHERNET_UP)
     read_network_interfaces(runner, timeout_seconds=15.0)
 
     assert runner.calls[0]["timeout_seconds"] == 15.0
 
 
 def test_timeout_none_is_forwarded() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    runner = _ip_result(stdout=_VALID_ETHERNET_UP)
     read_network_interfaces(runner, timeout_seconds=None)
 
     assert runner.calls[0]["timeout_seconds"] is None
 
 
 def test_returns_parsed_network_interface_status() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    runner = _ip_result(stdout=_VALID_ETHERNET_UP)
     status = read_network_interfaces(runner)
 
     assert isinstance(status, NetworkInterfaceStatus)
@@ -199,7 +106,7 @@ def test_empty_json_array_is_a_valid_non_error_result() -> None:
     """A zero-exit, empty-array result is a normal, valid outcome - not
     an error - per docs/NETWORK_ADAPTER.md#parser-strategy.
     """
-    runner = FakeCommandRunner(result=_make_result(stdout="[]"))
+    runner = _ip_result(stdout="[]")
     status = read_network_interfaces(runner)
 
     assert status.interfaces == ()
@@ -211,14 +118,14 @@ def test_empty_json_array_is_a_valid_non_error_result() -> None:
 
 
 def test_command_not_found_propagates() -> None:
-    runner = FakeCommandRunner(raise_not_found=True)
+    runner = FakeCommandRunner(not_found_tools=frozenset({"ip"}))
 
     with pytest.raises(CommandNotFoundError):
         read_network_interfaces(runner)
 
 
 def test_command_timeout_propagates() -> None:
-    runner = FakeCommandRunner(raise_timeout=True)
+    runner = FakeCommandRunner(timeout_tools=frozenset({"ip"}))
 
     with pytest.raises(CommandTimeoutError):
         read_network_interfaces(runner)
@@ -239,7 +146,7 @@ def test_command_timeout_propagates() -> None:
     ],
 )
 def test_unavailable_error_for_recognised_stderr_patterns(stderr: str) -> None:
-    runner = FakeCommandRunner(result=_make_result(stderr=stderr, exit_code=1))
+    runner = _ip_result(stderr=stderr, exit_code=1)
 
     with pytest.raises(NetworkUnavailableError) as exc_info:
         read_network_interfaces(runner)
@@ -249,7 +156,7 @@ def test_unavailable_error_for_recognised_stderr_patterns(stderr: str) -> None:
 
 
 def test_generic_error_for_unrecognised_stderr() -> None:
-    runner = FakeCommandRunner(result=_make_result(stderr="something went wrong", exit_code=1))
+    runner = _ip_result(stderr="something went wrong", exit_code=1)
 
     with pytest.raises(NetworkError) as exc_info:
         read_network_interfaces(runner)
@@ -266,7 +173,7 @@ def test_generic_error_for_unrecognised_stderr() -> None:
 
 
 def test_parse_error_for_invalid_json() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout="not json"))
+    runner = _ip_result(stdout="not json")
 
     with pytest.raises(NetworkParseError) as exc_info:
         read_network_interfaces(runner)
@@ -275,7 +182,7 @@ def test_parse_error_for_invalid_json() -> None:
 
 
 def test_parse_error_preserves_cause() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout="not json"))
+    runner = _ip_result(stdout="not json")
 
     with pytest.raises(NetworkParseError) as exc_info:
         read_network_interfaces(runner)
@@ -285,14 +192,14 @@ def test_parse_error_preserves_cause() -> None:
 
 
 def test_parse_error_for_malformed_entry() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout='[{"flags": ["UP", "LOWER_UP"]}]'))
+    runner = _ip_result(stdout='[{"flags": ["UP", "LOWER_UP"]}]')
 
     with pytest.raises(NetworkParseError):
         read_network_interfaces(runner)
 
 
 def test_parse_error_for_non_array_top_level() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout='{"ifname": "eth0"}'))
+    runner = _ip_result(stdout='{"ifname": "eth0"}')
 
     with pytest.raises(NetworkParseError):
         read_network_interfaces(runner)
@@ -304,6 +211,6 @@ def test_parse_error_for_non_array_top_level() -> None:
 
 
 def test_fake_command_runner_satisfies_protocol() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    runner = _ip_result(stdout=_VALID_ETHERNET_UP)
     # isinstance check against the runtime-checkable Protocol
     assert isinstance(runner, CommandRunner)
