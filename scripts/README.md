@@ -9,8 +9,10 @@ Maintainer, CI helper, and Beta validation scripts (repository housekeeping — 
 | `validate-beta.sh` | Orchestrate Beta validation — environment capture, CLI command execution, report generation. |
 | `verify-environment.sh` | Collect host environment metadata (kernel, distribution, hypervisor, tools) as JSON. |
 | `collect-artifacts.sh` | Archive all validation reports into a timestamped directory. |
+| `hardware-validation/` | Reusable hardware capture, comparison, and summary scripts — see [toolkit docs](../docs/HARDWARE_VALIDATION_TOOLKIT.md). |
 
-See [`docs/BETA_VALIDATION_AUTOMATION.md`](../docs/BETA_VALIDATION_AUTOMATION.md) for the full design, workflow, and CI integration guide.
+See [`docs/BETA_VALIDATION_AUTOMATION.md`](../docs/BETA_VALIDATION_AUTOMATION.md) for the Beta validation automation design, workflow, and CI integration guide.
+See [`docs/HARDWARE_VALIDATION_TOOLKIT.md`](../docs/HARDWARE_VALIDATION_TOOLKIT.md) for the hardware validation toolkit reference.
 
 ## Future
 
