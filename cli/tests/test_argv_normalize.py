@@ -51,3 +51,29 @@ def test_empty_argv_is_returned_unchanged() -> None:
 
 def test_only_options_no_subcommand() -> None:
     assert normalize_argv(["--help"]) == ["--help"]
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["doctor", "--help"], ["doctor", "--help"]),
+        (["doctor", "-h"], ["doctor", "-h"]),
+        (["validate", "--version"], ["validate", "--version"]),
+        (["-v", "doctor", "--help"], ["-v", "doctor", "--help"]),
+        # -v is a genuine global option and is still hoisted; --help is not.
+        (["doctor", "-v", "--help"], ["-v", "doctor", "--help"]),
+    ],
+)
+def test_help_and_version_are_not_hoisted_past_the_subcommand(
+    argv: list[str], expected: list[str]
+) -> None:
+    """``--help``/``-h``/``--version`` must stay wherever the caller put
+
+    them relative to the subcommand - per docs/CLI.md#global-options,
+    ``--help``/``-h`` shows help "for the current command" and
+    ``--version`` is "not valid after a subcommand". Hoisting them (like
+    genuine global options such as ``-v``) would make every
+    ``bcs <command> --help`` show the top-level help instead of the
+    command's own.
+    """
+    assert normalize_argv(argv) == expected

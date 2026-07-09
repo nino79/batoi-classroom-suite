@@ -16,8 +16,15 @@ from __future__ import annotations
 
 _MIN_GLUED_VERBOSE_LENGTH = 3  # "-vv" is the shortest glued cluster beyond a lone "-v"
 
-#: name -> takes_value, for every global option in docs/CLI.md#global-options.
+#: name -> takes_value, for every global option in docs/CLI.md#global-options
+#: that is genuinely equivalent before or after the subcommand name.
 #: Boolean/eager flags map to False; everything else takes one value.
+#:
+#: ``--help``/``-h`` and ``--version`` are deliberately absent: per
+#: docs/CLI.md#global-options, ``--help``/``-h`` shows help "for the
+#: current command" and ``--version`` is "not valid after a subcommand"
+#: - hoisting them here would force every ``bcs <command> --help`` to
+#: show the top-level help instead of the command's own.
 _GLOBAL_OPTIONS: dict[str, bool] = {
     "--config": True,
     "-c": True,
@@ -37,9 +44,6 @@ _GLOBAL_OPTIONS: dict[str, bool] = {
     "-y": False,
     "--dry-run": False,
     "--timeout": True,
-    "--version": False,
-    "--help": False,
-    "-h": False,
 }
 
 
