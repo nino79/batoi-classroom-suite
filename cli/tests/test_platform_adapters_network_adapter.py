@@ -1,20 +1,23 @@
-"""Tests for the EFI Adapter orchestration layer.
+"""Tests for the Network Adapter orchestration layer.
 
-These tests verify that ``read_firmware_boot_configuration``:
-- Invokes the correct command with correct locale-forced environment.
-- Forwards the timeout parameter correctly.
-- Returns a correctly-parsed ``FirmwareBootConfiguration`` on success.
+These tests verify that ``read_network_interfaces``:
+- Invokes the correct command (``["ip", "-json", "addr", "show"]``)
+  with correct locale-forced environment.
+- Forwards the timeout parameter correctly, defaulting to 5.0 seconds.
+- Returns a correctly-parsed ``NetworkInterfaceStatus`` on success,
+  including the empty-array (no interfaces) case.
 - Propagates ``CommandNotFoundError`` and ``CommandTimeoutError`` from
   the runner unchanged.
-- Raises ``FirmwareBootUnavailableError`` for non-zero exits whose
-  stderr is recognisably an "EFI variables unavailable" message.
-- Raises ``FirmwareBootError`` for other non-zero exits.
-- Raises ``FirmwareBootParseError`` when the command succeeds but the
-  output cannot be parsed.
+- Raises ``NetworkUnavailableError`` for non-zero exits whose stderr is
+  recognisably a "network data unavailable" message.
+- Raises ``NetworkError`` for other non-zero exits.
+- Raises ``NetworkParseError`` (with ``__cause__`` preserved) when the
+  command succeeds but the output cannot be parsed.
 
 A ``FakeCommandRunner`` is used instead of mocking
-``SubprocessCommandRunner`` directly, so the tests exercise the
-public ``CommandRunner`` interface rather than implementation details.
+``SubprocessCommandRunner`` directly, so the tests exercise the public
+``CommandRunner`` interface rather than implementation details,
+mirroring ``test_platform_adapters_secureboot_adapter.py``'s own style.
 """
 
 from __future__ import annotations
@@ -26,13 +29,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bcs.platform.adapters.efi.adapter import read_firmware_boot_configuration
-from bcs.platform.adapters.efi.errors import (
-    FirmwareBootError,
-    FirmwareBootParseError,
-    FirmwareBootUnavailableError,
+from bcs.platform.adapters.network.adapter import read_network_interfaces
+from bcs.platform.adapters.network.errors import (
+    NetworkError,
+    NetworkParseError,
+    NetworkUnavailableError,
 )
-from bcs.platform.adapters.efi.models import FirmwareBootConfiguration
+from bcs.platform.adapters.network.models import NetworkInterfaceStatus
 from bcs.platform.errors import CommandNotFoundError, CommandTimeoutError
 from bcs.platform.execution import CommandRunner
 
@@ -74,7 +77,7 @@ class FakeCommandRunner:
     """A configurable ``CommandRunner`` stand-in for testing.
 
     Set ``raise_not_found`` or ``raise_timeout`` to simulate those
-    runner-level exceptions.  Otherwise ``result`` (a
+    runner-level exceptions. Otherwise ``result`` (a
     ``FakeCommandResult``) is returned on every call.
     """
 
@@ -104,30 +107,19 @@ class FakeCommandRunner:
             }
         )
         if self.raise_not_found:
-            raise CommandNotFoundError("efibootmgr not found", executable="efibootmgr")
+            raise CommandNotFoundError("ip not found", executable="ip")
         if self.raise_timeout:
             raise CommandTimeoutError(
-                "efibootmgr timed out",
+                "ip timed out",
                 partial_result=MagicMock(),
             )
         return self.result.to_result()
 
 
-# ---------------------------------------------------------------------------
-# Valid fixture text used across tests
-# ---------------------------------------------------------------------------
-
-_VALID_OUTPUT = (
-    "BootCurrent: 0000\n"
-    "Timeout: 5 seconds\n"
-    "BootOrder: 0000,0001\n"
-    "BootNext: 0001\n"
-    "HD(1,GPT,aaaaaaaa-0000-0000-0000-000000000000,0x800,0x100000)"
-    "/File(\\EFI\\ubuntu\\shimx64.efi)\n"
-    "Boot0000* ubuntu\n"
-    "Boot0001* Windows Boot Manager\n"
-    "HD(1,GPT,bbbbbbbb-0000-0000-0000-000000000000,0x800,0x100000)"
-    "/File(\\EFI\\Microsoft\\Boot\\bootmgfw.efi)\n"
+_VALID_ETHERNET_UP = (
+    '[{"ifname": "eth0", "flags": ["BROADCAST", "MULTICAST", "UP", "LOWER_UP"], '
+    '"address": "52:54:00:12:34:56", '
+    '"addr_info": [{"family": "inet", "local": "10.0.2.15", "prefixlen": 24}]}]'
 )
 
 
@@ -139,7 +131,7 @@ def _make_result(
 ) -> FakeCommandResult:
     now = datetime.now(tz=UTC)
     return FakeCommandResult(
-        command=("efibootmgr", "-v"),
+        command=("ip", "-json", "addr", "show"),
         stdout=stdout,
         stderr=stderr,
         exit_code=exit_code,
@@ -155,12 +147,12 @@ def _make_result(
 
 
 def test_calls_correct_command_with_locale_env() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_OUTPUT))
-    read_firmware_boot_configuration(runner)
+    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    read_network_interfaces(runner)
 
     assert len(runner.calls) == 1
     call = runner.calls[0]
-    assert call["command"] == ["efibootmgr", "-v"]
+    assert call["command"] == ["ip", "-json", "addr", "show"]
     assert call["check"] is False
     # Locale must be forced to C for stable output
     assert call["env"]["LANG"] == "C"
@@ -169,34 +161,48 @@ def test_calls_correct_command_with_locale_env() -> None:
     assert "PATH" in call["env"]
 
 
+def test_default_timeout_is_five_seconds() -> None:
+    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    read_network_interfaces(runner)
+
+    assert runner.calls[0]["timeout_seconds"] == 5.0
+
+
 def test_forwards_timeout_seconds() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_OUTPUT))
-    read_firmware_boot_configuration(runner, timeout_seconds=15.0)
+    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    read_network_interfaces(runner, timeout_seconds=15.0)
 
     assert runner.calls[0]["timeout_seconds"] == 15.0
 
 
 def test_timeout_none_is_forwarded() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_OUTPUT))
-    read_firmware_boot_configuration(runner, timeout_seconds=None)
+    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    read_network_interfaces(runner, timeout_seconds=None)
 
     assert runner.calls[0]["timeout_seconds"] is None
 
 
-def test_returns_parsed_firmware_boot_configuration() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_OUTPUT))
-    config = read_firmware_boot_configuration(runner)
+def test_returns_parsed_network_interface_status() -> None:
+    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
+    status = read_network_interfaces(runner)
 
-    assert isinstance(config, FirmwareBootConfiguration)
-    assert config.current_boot_number == "0000"
-    assert config.timeout_seconds == 5
-    assert config.boot_order == ("0000", "0001")
-    assert config.boot_next == "0001"
-    assert len(config.entries) == 2
-    assert config.entries[0].boot_number == "0000"
-    assert config.entries[0].label == "ubuntu"
-    assert config.entries[1].boot_number == "0001"
-    assert config.entries[1].label == "Windows Boot Manager"
+    assert isinstance(status, NetworkInterfaceStatus)
+    assert len(status.interfaces) == 1
+    assert status.interfaces[0].name == "eth0"
+    assert status.interfaces[0].mac_address == "52:54:00:12:34:56"
+    assert status.interfaces[0].ip_addresses == ("10.0.2.15",)
+    assert status.interfaces[0].is_up is True
+    assert status.raw_text == _VALID_ETHERNET_UP
+
+
+def test_empty_json_array_is_a_valid_non_error_result() -> None:
+    """A zero-exit, empty-array result is a normal, valid outcome - not
+    an error - per docs/NETWORK_ADAPTER.md#parser-strategy.
+    """
+    runner = FakeCommandRunner(result=_make_result(stdout="[]"))
+    status = read_network_interfaces(runner)
+
+    assert status.interfaces == ()
 
 
 # ---------------------------------------------------------------------------
@@ -208,14 +214,14 @@ def test_command_not_found_propagates() -> None:
     runner = FakeCommandRunner(raise_not_found=True)
 
     with pytest.raises(CommandNotFoundError):
-        read_firmware_boot_configuration(runner)
+        read_network_interfaces(runner)
 
 
 def test_command_timeout_propagates() -> None:
     runner = FakeCommandRunner(raise_timeout=True)
 
     with pytest.raises(CommandTimeoutError):
-        read_firmware_boot_configuration(runner)
+        read_network_interfaces(runner)
 
 
 # ---------------------------------------------------------------------------
@@ -226,20 +232,17 @@ def test_command_timeout_propagates() -> None:
 @pytest.mark.parametrize(
     "stderr",
     [
-        "EFI variables are not available: efivars not mounted.",
-        "Could not open efivarfs: Permission denied",
-        "efibootmgr: BootVariable: Operation not permitted",
-        "efibootmgr: Read boot entries: No such file or directory",
-        "EFI System Partition not found.",
-        "efibootmgr: unable to communicate with boot variable",
-        "This system does not support EFI boot variables.",
+        "Error: ip: network namespace not accessible.",
+        "Cannot open netlink socket: Protocol not supported",
+        "ip: Permission denied",
+        "RTNETLINK answers: Network is unreachable",
     ],
 )
 def test_unavailable_error_for_recognised_stderr_patterns(stderr: str) -> None:
     runner = FakeCommandRunner(result=_make_result(stderr=stderr, exit_code=1))
 
-    with pytest.raises(FirmwareBootUnavailableError) as exc_info:
-        read_firmware_boot_configuration(runner)
+    with pytest.raises(NetworkUnavailableError) as exc_info:
+        read_network_interfaces(runner)
 
     assert exc_info.value.result is not None
     assert exc_info.value.result.exit_code == 1
@@ -248,13 +251,13 @@ def test_unavailable_error_for_recognised_stderr_patterns(stderr: str) -> None:
 def test_generic_error_for_unrecognised_stderr() -> None:
     runner = FakeCommandRunner(result=_make_result(stderr="something went wrong", exit_code=1))
 
-    with pytest.raises(FirmwareBootError) as exc_info:
-        read_firmware_boot_configuration(runner)
+    with pytest.raises(NetworkError) as exc_info:
+        read_network_interfaces(runner)
 
     assert exc_info.value.result is not None
     assert exc_info.value.result.exit_code == 1
     # Must NOT be the more specific subclass
-    assert not isinstance(exc_info.value, FirmwareBootUnavailableError)
+    assert not isinstance(exc_info.value, NetworkUnavailableError)
 
 
 # ---------------------------------------------------------------------------
@@ -262,16 +265,37 @@ def test_generic_error_for_unrecognised_stderr() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_parse_error_when_output_is_unrecognisable() -> None:
-    # The parser silently ignores lines it doesn't recognise (permissive by
-    # default).  To trigger FirmwareBootParseError the output must match a
-    # recognised prefix but contain an invalid value for that field.
-    runner = FakeCommandRunner(result=_make_result(stdout="BootCurrent: ZZ\n"))
+def test_parse_error_for_invalid_json() -> None:
+    runner = FakeCommandRunner(result=_make_result(stdout="not json"))
 
-    with pytest.raises(FirmwareBootParseError) as exc_info:
-        read_firmware_boot_configuration(runner)
+    with pytest.raises(NetworkParseError) as exc_info:
+        read_network_interfaces(runner)
 
-    assert exc_info.value.text == "BootCurrent: ZZ\n"
+    assert exc_info.value.text == "not json"
+
+
+def test_parse_error_preserves_cause() -> None:
+    runner = FakeCommandRunner(result=_make_result(stdout="not json"))
+
+    with pytest.raises(NetworkParseError) as exc_info:
+        read_network_interfaces(runner)
+
+    assert exc_info.value.__cause__ is not None
+    assert isinstance(exc_info.value.__cause__, ValueError)
+
+
+def test_parse_error_for_malformed_entry() -> None:
+    runner = FakeCommandRunner(result=_make_result(stdout='[{"flags": ["UP", "LOWER_UP"]}]'))
+
+    with pytest.raises(NetworkParseError):
+        read_network_interfaces(runner)
+
+
+def test_parse_error_for_non_array_top_level() -> None:
+    runner = FakeCommandRunner(result=_make_result(stdout='{"ifname": "eth0"}'))
+
+    with pytest.raises(NetworkParseError):
+        read_network_interfaces(runner)
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +304,6 @@ def test_parse_error_when_output_is_unrecognisable() -> None:
 
 
 def test_fake_command_runner_satisfies_protocol() -> None:
-    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_OUTPUT))
+    runner = FakeCommandRunner(result=_make_result(stdout=_VALID_ETHERNET_UP))
     # isinstance check against the runtime-checkable Protocol
     assert isinstance(runner, CommandRunner)

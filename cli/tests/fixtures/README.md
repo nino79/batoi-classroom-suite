@@ -13,6 +13,7 @@ tool, per the project's domain-driven naming rule
 | [`storage/`](storage/README.md) | Block devices / partitions | `bcs.platform.adapters.storage` ([docs/STORAGE_ADAPTER.md](../../../docs/STORAGE_ADAPTER.md)) — fully implemented |
 | [`secureboot/`](secureboot/README.md) | Secure Boot state | `bcs.platform.adapters.secureboot` ([docs/SECURE_BOOT_ADAPTER.md](../../../docs/SECURE_BOOT_ADAPTER.md)) — fully implemented |
 | [`filesystem/`](filesystem/README.md) | Filesystems / mounts | `bcs.platform.adapters.filesystem` ([docs/FILESYSTEM_ADAPTER.md](../../../docs/FILESYSTEM_ADAPTER.md)) — fully implemented |
+| [`network/`](network/README.md) | Network interfaces | `bcs.platform.adapters.network` ([docs/NETWORK_ADAPTER.md](../../../docs/NETWORK_ADAPTER.md)) — domain models, error hierarchy, and parser implemented; adapter pending |
 
 Load fixtures in tests through the shared helpers in
 [`../fixture_utils.py`](../fixture_utils.py) — never with ad hoc `open()`

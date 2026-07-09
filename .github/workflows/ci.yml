@@ -75,7 +75,7 @@ jobs:
         run: pytest --cov-report=xml
 
   cli-smoke-test:
-    name: bcs --help / version / doctor / validate smoke test
+    name: bcs --help / version / inventory / doctor / validate smoke test
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test]
     steps:
@@ -89,6 +89,8 @@ jobs:
         run: bcs --help
       - name: bcs version
         run: bcs version --output json
+      - name: bcs inventory
+        run: bcs inventory --output json
       - name: bcs doctor (informational; exit code not gated in CI)
         run: bcs doctor --output json || true
       - name: bcs validate (real example config)

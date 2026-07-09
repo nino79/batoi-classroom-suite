@@ -1,6 +1,6 @@
 # Network Adapter — Design Proposal (Network Interface Status, Host Discovery)
 
-> **Status: Proposed.** This document is the design for the Network Adapter, the fifth Host Discovery adapter in BCS's Platform Layer, following the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md) (`Accepted`, implemented), the [Storage Adapter](STORAGE_ADAPTER.md) (`Accepted`, implemented), the [Secure Boot Adapter](SECURE_BOOT_ADAPTER.md) (`Accepted`, fully implemented), and the [Filesystem Adapter](FILESYSTEM_ADAPTER.md) (`Accepted`, fully implemented). This document describes the adapter's complete design — domain models, pure parser, error hierarchy, adapter orchestration, fixture strategy, and composition-root wiring — following the established pattern, and concludes that no new ADR is required. **Not yet implemented** — tracked as GitHub issue #73.
+> **Status: Accepted; domain models, error hierarchy, pure parser, adapter, and fixture corpus scaffold implemented (Parts 1–5).** This document is the design for the Network Adapter, the fifth Host Discovery adapter in BCS's Platform Layer, following the same ports-and-adapters architecture as the [EFI Adapter](EFI_ADAPTER.md) (`Accepted`, implemented), the [Storage Adapter](STORAGE_ADAPTER.md) (`Accepted`, implemented), the [Secure Boot Adapter](SECURE_BOOT_ADAPTER.md) (`Accepted`, fully implemented), and the [Filesystem Adapter](FILESYSTEM_ADAPTER.md) (`Accepted`, fully implemented). This document describes the adapter's complete design — domain models, pure parser, error hierarchy, adapter orchestration, fixture strategy, and composition-root wiring — following the established pattern, and concludes that no new ADR is required (see [§ ADR Recommendation](#adr-recommendation)). **Implemented:** `NetworkInterface`/`NetworkInterfaceStatus` (`cli/src/bcs/platform/adapters/network/models.py`), per [§ Domain Models](#domain-models); `NetworkError`/`NetworkUnavailableError`/`NetworkParseError` (`cli/src/bcs/platform/adapters/network/errors.py`), per [§ Error Hierarchy](#error-hierarchy); `parse_network_interfaces` (`cli/src/bcs/platform/adapters/network/parser.py`), per [§ Parser Strategy](#parser-strategy); `read_network_interfaces` (`cli/src/bcs/platform/adapters/network/adapter.py`), per [§ Adapter Responsibilities](#adapter-responsibilities); and `cli/tests/fixtures/network/` with six zero-byte placeholder files and README, per [§ Fixtures Strategy](#fixtures-strategy) — the complete adapter as designed in this document. **Not yet implemented:** dedicated `errors.py`/`parser.py`/`adapter.py` unit test modules (see [§ Testing Strategy](#testing-strategy)) and composition-root/Host Discovery wiring — tracked as GitHub issue #73.
 
 ## Purpose
 
@@ -27,7 +27,7 @@ Mirroring [docs/EFI_ADAPTER.md § Read-Only Guarantee](EFI_ADAPTER.md#read-only-
 - Interface name (e.g. `eth0`, `wlp2s0`)
 - MAC/link-layer address
 - All assigned IP addresses (IPv4 and IPv6), including link-local
-- Operational state (UP/DOWN/UNKNOWN based on kernel flags)
+- Operational state (UP or DOWN, derived from the `flags` kernel attribute)
 - Loopback vs. non-loopback classification
 
 **Out of scope and explicitly not modelled:**
@@ -47,19 +47,20 @@ cli/src/bcs/platform/adapters/
     │                              # NOT named "iproute2" or "ip": the package survives
     │                              # a future backend swap (netlink direct, sysfs
     │                              # complement, rtnetlink socket, ...)
-    ├── __init__.py                # re-exports NetworkInterface, NetworkInterfaceStatus,
-    │                              # parse_network_interfaces, read_network_interfaces,
-    │                              # NetworkError, NetworkUnavailableError, NetworkParseError
-    ├── models.py                  # NetworkInterface, NetworkInterfaceStatus
+    ├── __init__.py                # [implemented] re-exports NetworkInterface,
+    │                              # NetworkInterfaceStatus, parse_network_interfaces,
+    │                              # read_network_interfaces, NetworkError,
+    │                              # NetworkUnavailableError, NetworkParseError
+    ├── models.py                  # [implemented] NetworkInterface, NetworkInterfaceStatus
     │                              # (frozen, JSON-serializable) — see § Domain Models
-    ├── parser.py                  # parse_network_interfaces(text: str) ->
+    ├── parser.py                  # [implemented] parse_network_interfaces(text: str) ->
     │                              # NetworkInterfaceStatus — a pure function;
     │                              # see § Parser Strategy
-    ├── adapter.py                 # read_network_interfaces(runner: CommandRunner) ->
+    ├── adapter.py                 # [implemented] read_network_interfaces(runner: CommandRunner) ->
     │                              # NetworkInterfaceStatus — the only place this
     │                              # package calls CommandRunner.run(), and the only
     │                              # place that knows the current backend is ip
-    └── errors.py                  # NetworkError(PlatformError) and its
+    └── errors.py                  # [implemented] NetworkError(PlatformError) and its
                                  # two subclasses
 ```
 
@@ -67,7 +68,7 @@ Directory named `network` (the domain name, not the tool name), matching the pat
 
 ## Domain Models
 
-**Designed here; not yet implemented.**
+**Implemented** (`cli/src/bcs/platform/adapters/network/models.py`; see `cli/tests/test_platform_adapters_network_models.py` for the corresponding test coverage).
 
 The Network Adapter has two domain models: `NetworkInterface` (one observed interface) and `NetworkInterfaceStatus` (the complete set of observed interfaces on the system).
 
@@ -109,7 +110,7 @@ Both models are **frozen** (`frozen=True, extra="forbid"`), matching every other
 
 ## Parser Strategy
 
-**Designed here; not yet implemented.**
+**Implemented** (`cli/src/bcs/platform/adapters/network/parser.py`) — see [§ Testing Strategy](#testing-strategy) for its current coverage/testing status.
 
 `parser.parse_network_interfaces(text: str) -> NetworkInterfaceStatus` is a **pure function**, with the same independence guarantees already established for every existing Platform Layer parser:
 
@@ -162,9 +163,11 @@ The expected JSON structure (of what `ip -json addr show` currently produces —
 3. **A missing or empty `ifname`** is a malformed entry — rejected with a `ValueError` quoting the 1-based entry index, mirroring `_raise_malformed`'s existing shape.
 4. **A non-array `addr_info`** (defensive; not expected from real `ip`) is treated as absent — `ip_addresses` is set to empty.
 
+`is_up` is derived from the `flags` array rather than the `operstate` field that `ip -json` also provides, because the flags (`UP` + `LOWER_UP`) are the kernel's most fundamental representation of administrative state and link state — the same two facts the existing `sysfs`-based collector reads separately. For BCS's wired-Ethernet target platform, the two sources do not meaningfully diverge.
+
 ## Adapter Responsibilities
 
-**Designed here; not yet implemented.**
+**Implemented** (`cli/src/bcs/platform/adapters/network/adapter.py`; see `cli/tests/test_platform_adapters_network_adapter.py` for the corresponding test coverage).
 
 `adapter.read_network_interfaces(runner: CommandRunner) -> NetworkInterfaceStatus` is the only place this package calls `CommandRunner.run()`, and the **only** place that knows the current backend is `ip`:
 
@@ -175,7 +178,7 @@ The expected JSON structure (of what `ip -json addr show` currently produces —
 5. On a non-zero exit, select an exception per [§ Error Mapping](#error-mapping).
 6. Return the parsed `NetworkInterfaceStatus`.
 
-`timeout_seconds` defaults to **5.0 seconds**, matching the EFI and Secure Boot adapters' own defaults — reading interface state via netlink is normally near-instant.
+`timeout_seconds` defaults to **5.0 seconds**, matching the Secure Boot adapter's own default — reading interface state via netlink is normally near-instant.
 
 ## Interaction with `CommandRunner`
 
@@ -189,7 +192,7 @@ Identical shape to every existing adapter:
 
 ## Error Hierarchy
 
-**Designed here; not yet implemented.**
+**Implemented** (`cli/src/bcs/platform/adapters/network/errors.py`) — see [§ Testing Strategy](#testing-strategy) for its current coverage/testing status.
 
 ```mermaid
 classDiagram
@@ -230,15 +233,15 @@ This adapter follows the Platform Layer's locale policy in full — see [docs/PL
 
 ## Testing Strategy
 
-**Designed here; not yet implemented.**
+**Models, errors, parser, and adapter are all implemented (Parts 1–4). `models.py` and `adapter.py` each have a dedicated test module at 100% statement and branch coverage; `errors.py`/`parser.py` do not yet have their own dedicated test modules — both are currently exercised only transitively, through `adapter.py`'s own tests (`network/errors.py` reaches 100% coverage this way; `network/parser.py` reaches ~86%, since `adapter.py`'s tests do not exercise every parser branch — e.g. a non-string `flags` entry, or an `addr_info` entry with an unrecognized `family`). Closing this gap with dedicated `test_platform_adapters_network_errors.py`/`test_platform_adapters_network_parser.py` modules remains outstanding, per this adapter's own [Implementation Plan § Part 2](NETWORK_ADAPTER_IMPLEMENTATION_PLAN.md)/[§ Part 3](NETWORK_ADAPTER_IMPLEMENTATION_PLAN.md).**
 
 | Layer | What it verifies | How |
 |---|---|---|
-| `models.NetworkInterface`/`models.NetworkInterfaceStatus` | Construction, defaults, immutability, equality, hashability, JSON serialization/deserialization round-tripping (including alias names), and independence from `bcs.inventory.models.NetworkInterface` (compatible fields, distinct type). | Direct unit tests, no fixtures or mocking needed — mirroring `test_platform_adapters_efi_models.py`. |
-| `parser.parse_network_interfaces` | Every JSON field shape individually and combined; permissive handling of unrecognized fields; absent `address`; null MAC (`00:00:00:00:00:00`); empty `addr_info`; absent `addr_info`; empty input (empty JSON array); multiple interfaces; IPv4 and IPv6 mixed; a malformed entry (missing `ifname`) with its index-in-array error message; and (via AST inspection, not a substring search) the import-purity check already established for every existing parser's test module. | Direct unit tests, using fixtures loaded via `fixture_utils.py`. Given the corpus starts empty (see [§ Fixtures Strategy](#fixtures-strategy)), tests build a `tmp_path`-rooted synthetic corpus mirroring the real one's layout, exactly as the EFI parser tests did before real `efibootmgr` captures existed. |
-| `adapter.read_network_interfaces` | Correct command (`["ip", "-json", "addr", "show"]`), correct locale-forced `env`, correct explicit `timeout_seconds` (including the 5.0-second default), `check=False`, correct hand-off to the parser, and the adapter-level `NetworkParseError` wrapping. | `FakeCommandRunner` programmed to return a `CommandResult` wrapping fixture text as `stdout`, mirroring `test_platform_adapters_efi_adapter.py`. |
-| Error mapping | Each condition in [§ Error Mapping](#error-mapping) maps to the right exception. | `FakeCommandRunner` programmed to return/raise each failure shape — a non-zero `CommandResult` with recognizable "unavailable" `stderr`; a non-zero `CommandResult` with unrecognized `stderr`; a zero-exit `CommandResult` with bad JSON; `CommandNotFoundError`/`CommandTimeoutError` passed through unchanged. |
-| Real end-to-end (optional, environment-gated) | That the whole chain works against a real `ip` binary on the target platform. | Skipped unless on Linux with `ip` on `PATH`; expected to skip in CI (non-Linux runners). |
+| `models.NetworkInterface`/`models.NetworkInterfaceStatus` **(implemented)** | Construction, defaults, both alias spellings (`populate_by_name`), immutability, equality, hashability, JSON serialization/deserialization round-tripping (including alias names), and independence from `bcs.inventory.models.NetworkInterface` (compatible fields, distinct type). | Direct unit tests, no fixtures or mocking needed — mirroring `test_platform_adapters_efi_models.py`. See `cli/tests/test_platform_adapters_network_models.py`; `network/models.py` is at 100% statement and branch coverage. |
+| `parser.parse_network_interfaces` **(implemented; no dedicated test module yet)** | Every JSON field shape individually and combined; permissive handling of unrecognized fields; absent `address`; null MAC (`00:00:00:00:00:00`); empty `addr_info`; absent `addr_info`; empty input (empty JSON array); multiple interfaces; IPv4 and IPv6 mixed; a malformed entry (missing `ifname`) with its index-in-array error message; and (via AST inspection, not a substring search) the import-purity check already established for every existing parser's test module. | Planned: direct unit tests, using fixtures loaded via `fixture_utils.py`. Given the corpus starts empty (see [§ Fixtures Strategy](#fixtures-strategy)), tests would build a `tmp_path`-rooted synthetic corpus mirroring the real one's layout, exactly as the EFI parser tests did before real `efibootmgr` captures existed. Not yet implemented — see this section's own note above. |
+| `adapter.read_network_interfaces` **(implemented)** | Correct command (`["ip", "-json", "addr", "show"]`), correct locale-forced `env` (with `PATH` preserved), correct explicit `timeout_seconds` (including the 5.0-second default and `None`), `check=False`, correct hand-off to the parser, the adapter-level `NetworkParseError` wrapping with `__cause__` preserved, and the empty-JSON-array-is-not-an-error case. | `FakeCommandRunner` programmed to return a `CommandResult` wrapping inline JSON text as `stdout`, mirroring `test_platform_adapters_secureboot_adapter.py`. See `cli/tests/test_platform_adapters_network_adapter.py`; `network/adapter.py` is at 100% statement and branch coverage. |
+| Error mapping **(implemented, via `adapter.read_network_interfaces`'s own test module)** | Each condition in [§ Error Mapping](#error-mapping) maps to the right exception. | `FakeCommandRunner` programmed to return/raise each failure shape — a non-zero `CommandResult` with each recognizable "unavailable" `stderr` pattern; a non-zero `CommandResult` with unrecognized `stderr`; a zero-exit `CommandResult` with invalid JSON, a non-array top level, or a malformed entry; `CommandNotFoundError`/`CommandTimeoutError` passed through unchanged. |
+| Real end-to-end (optional, environment-gated) | That the whole chain works against a real `ip` binary on the target platform. | Skipped unless on Linux with `ip` on `PATH`; expected to skip in CI (non-Linux runners). Not yet implemented, mirroring every sibling adapter's own "planned, not built" status for this row. |
 
 ## Fixtures Strategy
 
@@ -328,7 +331,7 @@ sequenceDiagram
 This adapter is designed to fill the `network` slot of `HostDiscoveryAdapters`/`HostDiscoverySnapshot` (defined in [docs/HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md)), which is currently served by the inlined `collect_network()` from `bcs.inventory.collectors` wired directly as a `Callable` — not following the adapter pattern. Once this adapter is implemented:
 
 - `HostDiscoveryAdapters.network` changes from `Callable[[], list[NetworkInterface]] | None` (the current `collect_network` shape, domain-model-importing from `bcs.inventory`) to `Callable[[], NetworkInterfaceStatus] | None` (adapter-shaped, domain-model-importing from `bcs.platform.adapters.network`).
-- `HostDiscoverySnapshot.network` narrows from `list[NetworkInterface] | None` to `NetworkInterfaceStatus | None`.
+- `HostDiscoverySnapshot.network` narrows from `tuple[NetworkInterface, ...]` to `NetworkInterfaceStatus | None`.
 - The composition root (`bcs.app.main()`) binds `read_network_interfaces` into the slot, sharing the same `CommandRunner` instance as the other adapters — exactly as [docs/HOST_DISCOVERY_ORCHESTRATOR.md § Dependency Injection Strategy](HOST_DISCOVERY_ORCHESTRATOR.md#dependency-injection-strategy) already does for `efi`, `storage`, `secure_boot`, and `filesystem`.
 
 This wiring is the same step [ADR-0011](decisions/0011-host-discovery-orchestrator.md) already specifies for any adapter reaching implementation.
@@ -354,7 +357,7 @@ This adapter is the natural continuation of the architecture already accepted in
 
 ## Open Questions
 
-- **Null MAC for loopback:** The current `collect_network()` explicitly leaves `mac_address` as a proper MAC for loopback. `ip -json` returns `address: "00:00:00:00:00:00"` for loopback — the parser must normalise this to `None` (matching the semantic intent that loopback has no real MAC) or preserve the literal `"00:00:00:00:00:00"`. This design recommends normalising to `None` in the parser, documented in [§ Parser Strategy](#parser-strategy).
+- **Null MAC for loopback:** The current `collect_network()` reads `/sys/class/net/lo/address` and stores the result verbatim (which on Linux returns `"00:00:00:00:00:00"`). The proposed parser encounters the same value from `ip -json` and normalises it to `None` — a deliberate semantic improvement (loopback has no real MAC), but a behavioral difference from the existing collector. Documented in [§ Parser Strategy](#parser-strategy).
 - **Real fixture capture** — the category `cli/tests/fixtures/network/` does not yet exist; no real `ip` output has been captured. The six required scenarios are defined in [§ Fixtures Strategy](#fixtures-strategy); someone with access to a deployed LliureX machine on Ubuntu 24.04 LTS will need to capture them.
 - **Whether/how this adapter is wired into `bcs inventory`/`bcs doctor`** — not decided here. The Host Discovery Orchestrator wiring is an architectural given (the `network` slot exists and this adapter fills it); the CLI command that actually invokes the orchestrator and displays its output is a separate concern, not yet implemented by any command (none currently passes `runtime.host_discovery_orchestrator` through).
 - **Interface classification** — no model field flags an interface as "management," "deployment-target," "primary," or anything beyond `is_loopback`. That classification, if ever needed, belongs to a domain service consuming this adapter's output, not to this adapter itself.
