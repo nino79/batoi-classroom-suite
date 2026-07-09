@@ -10,9 +10,11 @@ Maintainer, CI helper, and Beta validation scripts (repository housekeeping — 
 | `verify-environment.sh` | Collect host environment metadata (kernel, distribution, hypervisor, tools) as JSON. |
 | `collect-artifacts.sh` | Archive all validation reports into a timestamped directory. |
 | `hardware-validation/` | Reusable hardware capture, comparison, and summary scripts — see [toolkit docs](../docs/HARDWARE_VALIDATION_TOOLKIT.md). |
+| `release/` | Beta release engineering scripts — build, verify, install, release notes — see [release engineering docs](../docs/RELEASE_ENGINEERING.md). |
 
 See [`docs/BETA_VALIDATION_AUTOMATION.md`](../docs/BETA_VALIDATION_AUTOMATION.md) for the Beta validation automation design, workflow, and CI integration guide.
 See [`docs/HARDWARE_VALIDATION_TOOLKIT.md`](../docs/HARDWARE_VALIDATION_TOOLKIT.md) for the hardware validation toolkit reference.
+See [`docs/RELEASE_ENGINEERING.md`](../docs/RELEASE_ENGINEERING.md) for the release engineering toolkit reference.
 
 ## Future
 
