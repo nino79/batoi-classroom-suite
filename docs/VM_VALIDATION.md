@@ -190,7 +190,7 @@ Checklist estructurada para validar el funcionamiento de `bcs` en una máquina v
 |---|---|
 | **Objetivo** | Verificar que el doctor ejecuta todas las comprobaciones |
 | **Comando** | `bcs doctor` |
-| **Resultado esperado** | Muestra checks: firmware, storage, network, tooling, config, permissions, esp, usb-storage. Cada check muestra [OK], [WARN] o [FAIL]. No se cuelga. |
+| **Resultado esperado** | Muestra checks: firmware, secure-boot, storage, network, tooling, config, permissions, esp, usb-storage. Cada check muestra [OK], [WARN] o [FAIL]. No se cuelga. |
 | **Resultado real** | |
 | **PASS/FAIL** | |
 | **Notas** | |
