@@ -27,7 +27,7 @@ This document does not replace any of those — see [§ 10. Reading Guide](#10-r
 | Secure Boot Adapter | Read-only firmware Secure Boot state wrapper | ✅ Fully implemented | [docs/SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md) (Accepted) | `cli/src/bcs/platform/adapters/secureboot/` — same four-file shape | `cli/tests/test_platform_adapters_secureboot_*.py` | Wired into the Host Discovery composition root (`secure_boot` slot). Not yet folded into `HostInventory`'s own schema. |
 | Host Discovery Orchestrator | Coordinates every Host Discovery adapter into one snapshot | ✅ Implemented end to end | [docs/HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md) ([ADR-0011](decisions/0011-host-discovery-orchestrator.md), Accepted) | `cli/src/bcs/inventory/discovery/` — data models, coordination logic, `RuntimeContext.host_discovery_orchestrator` composition-root wiring | `cli/tests/test_inventory_discovery_*.py`, `test_host_discovery_*.py` | No `bcs` command passes `runtime.host_discovery_orchestrator` into `collect_host_inventory()` yet. |
 | Filesystem Adapter | Read-only filesystem usage/capacity wrapper | ✅ Fully implemented | [docs/FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) (`Accepted`) | `cli/src/bcs/platform/adapters/filesystem/` — `models.py`/`parser.py`/`adapter.py`/`errors.py` | `cli/tests/test_platform_adapters_filesystem_*.py` | Fourth Host Discovery adapter. Wired into the Host Discovery composition root (`filesystem` slot). Not yet folded into `HostInventory`'s own schema. |
-| Network Adapter | Network interface enumeration | 💤 No dedicated adapter | — | `bcs.inventory.collectors.collect_network()` (existing `sysfs`-based collector), reused directly as the `network` Host Discovery slot | `cli/tests/test_inventory_collectors.py` | No tool-based Platform Layer adapter has been designed for this domain; `NetworkInterface.ip_addresses` is a documented, permanent placeholder gap in the current collector. |
+| Network Adapter | Network interface enumeration | 📝 Design proposed | [docs/NETWORK_ADAPTER.md](NETWORK_ADAPTER.md) (Proposed) | `bcs.inventory.collectors.collect_network()` (existing `sysfs`-based collector), reused directly as the `network` Host Discovery slot | `cli/tests/test_inventory_collectors.py` | A Platform Layer adapter has been designed (`docs/NETWORK_ADAPTER.md`, Proposed); `NetworkInterface.ip_addresses` is a documented, permanent placeholder gap in the current collector that the proposed adapter closes. |
 | CPU Adapter | CPU facts | 💤 No dedicated adapter | — | `bcs.inventory.collectors.collect_cpu()`, reused directly as the `cpu` Host Discovery slot | `cli/tests/test_inventory_collectors.py` | Same pattern as Network — no dedicated tool-based adapter designed. |
 | Memory Adapter | Memory facts | 💤 No dedicated adapter | — | `bcs.inventory.collectors.collect_memory()`, reused directly as the `memory` Host Discovery slot | `cli/tests/test_inventory_collectors.py` | Same pattern as Network — no dedicated tool-based adapter designed. |
 | TPM Adapter | TPM facts | 💤 Not designed | — | None | None | A reserved slot name (`tpm`) in [`HostDiscoveryAdapters`/`HostDiscoverySnapshot`](HOST_DISCOVERY_ORCHESTRATOR.md#public-api) only; no design document exists, and no `SPECIFICATION.md` requirement currently motivates one. |
@@ -63,12 +63,13 @@ This table mirrors the authoritative index at [docs/decisions/README.md § Index
 | Storage | ✅ | ✅ | ✅ | ✅ | ✅ (`storage` slot) | ✅ Wired | ✅ | [STORAGE_ADAPTER.md](STORAGE_ADAPTER.md) — Accepted |
 | Secure Boot | ✅ | ✅ | ✅ | ✅ | ✅ (`secure_boot` slot) | ✅ Wired | ✅ | [SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md) — Accepted |
 | Filesystem | ✅ | ✅ | ✅ | ✅ | ✅ (`filesystem` slot) | ✅ Wired | ✅ | [FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md) — Accepted |
+| Network | 📝 | 📝 | 📝 | 📝 | ❌ (still uses `sysfs` collector) | ✅ Wired (sysfs) | ✅ (collectors only) | [NETWORK_ADAPTER.md](NETWORK_ADAPTER.md) — Proposed |
 
 "Composition Root" means bound in `bcs.app.main()`'s `HostDiscoveryAdapters` construction (`cli/src/bcs/app.py`), sharing the single `SubprocessCommandRunner` instance. "Host Discovery" means `HostDiscoveryOrchestrator.discover()` actually invokes that slot when called. Neither implies the result reaches `HostInventory`'s own schema or any `bcs` command's output — see [§ 5](#5-host-discovery-status).
 
 ## 5. Host Discovery Status
 
-**Implemented adapters** (wired at the composition root, invoked by `HostDiscoveryOrchestrator.discover()`): `efi`, `storage`, `secure_boot`, `filesystem` — see [§ 4](#4-platform-adapter-matrix). `network`, `cpu`, `memory` are also wired, but to the pre-existing `sysfs`-based `bcs.inventory.collectors` functions directly, not to a tool-based Platform Layer adapter.
+**Implemented adapters** (wired at the composition root, invoked by `HostDiscoveryOrchestrator.discover()`): `efi`, `storage`, `secure_boot`, `filesystem` — see [§ 4](#4-platform-adapter-matrix). `network`, `cpu`, `memory` are also wired, but to the pre-existing `sysfs`-based `bcs.inventory.collectors` functions directly, not to a tool-based Platform Layer adapter. A tool-based Network Adapter design document (`docs/NETWORK_ADAPTER.md`) now exists in Proposed status.
 
 **Pending adapters:** `tpm` (not designed at all, no motivating requirement).
 
@@ -87,7 +88,7 @@ Full detail lives in [ROADMAP.md](../ROADMAP.md); this is a status count only, n
 
 | Phase | Items | Done | In progress | Planned / not started |
 |---|---|---|---|---|
-| [Phase 0 — Foundation](../ROADMAP.md#phase-0--foundation-architecture--governance) | 15 | 9 | 6 | 0 |
+| [Phase 0 — Foundation](../ROADMAP.md#phase-0--foundation-architecture--governance) | 15 | 15 | 0 | 0 |
 | Phase 1 — Boot Manager | 5 | 0 | 0 | 5 |
 | Phase 2 — Builder | 4 | 1 | 0 | 3 |
 | Phase 3 — Deploy | 5 | 0 | 0 | 5 |
@@ -95,9 +96,7 @@ Full detail lives in [ROADMAP.md](../ROADMAP.md); this is a status count only, n
 | Phase 5 — Hardening & Scale | 4 | 0 | 0 | 4 (not started) |
 | v1.0 — General Availability | 3 | 0 | 0 | 3 (not started) |
 
-**Completed:** the `bcs` CLI framework, the unified configuration format, Host Inventory, the Platform Layer core, and all four implemented Host Discovery adapters (EFI/Storage/Secure Boot/Filesystem) plus the Host Discovery Orchestrator — all within Phase 0.
-
-**In progress:** the remaining Phase 0 foundational documents (project mission/README, `ARCHITECTURE.md`, `SPECIFICATION.md`, contribution workflow, initial ADRs, issue/PR templates) are marked `🚧` in ROADMAP.md — they exist but are treated as living documents, continuously refined rather than finished once.
+**Completed:** all 15 Phase 0 items, including the documentation set (README, `ARCHITECTURE.md`, `SPECIFICATION.md`, contribution workflow, ADRs, issue/PR templates), the `bcs` CLI framework, the unified configuration format, Host Inventory, the Platform Layer core, and all four implemented Host Discovery adapters (EFI/Storage/Secure Boot/Filesystem) plus the Host Discovery Orchestrator. All foundational documents are living documents that will be refined as implementation proceeds.
 
 **Planned:** Phases 1 through 4 in full, and the two Phase 5/v1.0 item groups not started at all. See [ROADMAP.md](../ROADMAP.md) for the itemized list of what each phase actually requires.
 
@@ -128,7 +127,7 @@ Each item links to the design document or ADR that already records it in full �
 **Low**
 
 - `FrozenModel`/`FrozenExtensibleModel` relocation to `bcs.model_utils` — see [docs/PLATFORM_LAYER.md § Approved Design Decisions](PLATFORM_LAYER.md#approved-design-decisions), item 5.
-- Network/CPU/Memory/TPM tool-based adapters are not designed and not currently motivated by any `SPECIFICATION.md` requirement — see [docs/HOST_DISCOVERY_ORCHESTRATOR.md § Future Extensibility](HOST_DISCOVERY_ORCHESTRATOR.md#future-extensibility). If one is ever proposed, it should follow the process in [PATTERNS.md](PATTERNS.md), the methodology extracted from the EFI/Storage/Secure Boot adapters.
+- CPU/Memory/TPM tool-based adapters are not designed and not currently motivated by any `SPECIFICATION.md` requirement — see [docs/HOST_DISCOVERY_ORCHESTRATOR.md § Future Extensibility](HOST_DISCOVERY_ORCHESTRATOR.md#future-extensibility). If one is ever proposed, it should follow the process in [PATTERNS.md](PATTERNS.md), the methodology extracted from the EFI/Storage/Secure Boot adapters. The Network Adapter design document (`docs/NETWORK_ADAPTER.md`) now exists in Proposed status, following that exact process.
 
 ## 9. Current Architecture Snapshot
 
@@ -204,6 +203,6 @@ flowchart TB
 - **If you want implementation status** → this document, `docs/IMPLEMENTATION_STATUS.md`
 - **If you want future work** → [ROADMAP.md](../ROADMAP.md)
 - **If you want historical changes** → [CHANGELOG.md](../CHANGELOG.md)
-- **If you want design details** → the individual design documents ([HOST_INVENTORY.md](HOST_INVENTORY.md), [PLATFORM_LAYER.md](PLATFORM_LAYER.md), [EFI_ADAPTER.md](EFI_ADAPTER.md), [STORAGE_ADAPTER.md](STORAGE_ADAPTER.md), [SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md), [FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md), [HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md), [CLI.md](CLI.md), [CONFIGURATION.md](CONFIGURATION.md))
+- **If you want design details** → the individual design documents ([HOST_INVENTORY.md](HOST_INVENTORY.md), [PLATFORM_LAYER.md](PLATFORM_LAYER.md), [EFI_ADAPTER.md](EFI_ADAPTER.md), [STORAGE_ADAPTER.md](STORAGE_ADAPTER.md), [SECURE_BOOT_ADAPTER.md](SECURE_BOOT_ADAPTER.md), [FILESYSTEM_ADAPTER.md](FILESYSTEM_ADAPTER.md), [NETWORK_ADAPTER.md](NETWORK_ADAPTER.md), [HOST_DISCOVERY_ORCHESTRATOR.md](HOST_DISCOVERY_ORCHESTRATOR.md), [CLI.md](CLI.md), [CONFIGURATION.md](CONFIGURATION.md))
 - **If you want architectural decisions** → [docs/decisions/](decisions/) (the ADRs)
 - **If you want to build the next Platform Layer adapter** → [PATTERNS.md](PATTERNS.md) — the repeatable lifecycle, Definition of Done, testing strategy, and checklist every adapter in [§ 4. Platform Adapter Matrix](#4-platform-adapter-matrix) already followed

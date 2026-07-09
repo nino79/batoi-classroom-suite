@@ -9,13 +9,13 @@ Status legend: ✅ Done · 🚧 In progress · ⏳ Planned · 💤 Not started
 **Goal:** agree on scope, boundaries, and requirements before writing implementation code.
 
 | Item | Status |
-|---|---|
-| Project mission, README, and repository structure | 🚧 |
-| System architecture (`ARCHITECTURE.md`) | 🚧 |
-| Functional & non-functional specification (`SPECIFICATION.md`) | 🚧 |
-| Contribution workflow, Code of Conduct, Security policy | 🚧 |
-| Initial Architecture Decision Records | 🚧 |
-| Issue/PR templates and label taxonomy | 🚧 |
+|---|---|---|
+| Project mission, README, and repository structure | ✅ |
+| System architecture (`ARCHITECTURE.md`) | ✅ |
+| Functional & non-functional specification (`SPECIFICATION.md`) | ✅ |
+| Contribution workflow, Code of Conduct, Security policy | ✅ |
+| Initial Architecture Decision Records | ✅ |
+| Issue/PR templates and label taxonomy | ✅ |
 | Unified configuration format (`docs/CONFIGURATION.md`, `config/schema.yaml`) | ✅ |
 | `bcs` CLI design (`docs/CLI.md`) | ✅ |
 | `bcs` CLI framework implementation (`cli/`, Python — [ADR-0007](docs/decisions/0007-python-for-the-bcs-cli.md)) | ✅ |
@@ -26,7 +26,7 @@ Status legend: ✅ Done · 🚧 In progress · ⏳ Planned · 💤 Not started
 | Secure Boot Adapter, third Host Discovery adapter (`docs/SECURE_BOOT_ADAPTER.md`); fully implemented | ✅ |
 | Host Discovery Orchestrator design (`docs/HOST_DISCOVERY_ORCHESTRATOR.md`, [ADR-0011](docs/decisions/0011-host-discovery-orchestrator.md) — Accepted); implemented end to end, including `RuntimeContext`/composition-root wiring | ✅ |
 
-This phase's primary output is the documentation set in this repository. The one exception is the `bcs` CLI framework itself (`--help`, `version`, `doctor`, `validate`, with `build`/`install`/`deploy`/`backup`/`restore`/`update`/`config` as unimplemented stubs) — a deliberate, scoped exception, not a sign Boot Manager/Builder/Deploy implementation has started; those remain gated on this phase's review before Phase 1 begins.
+This phase's primary output is the documentation set in this repository. The one exception is the `bcs` CLI framework itself (`--help`, `version`, `doctor`, `validate`, `inventory`, with `build`/`install`/`deploy`/`backup`/`restore`/`update`/`config` as unimplemented stubs) — a deliberate, scoped exception, not a sign Boot Manager/Builder/Deploy implementation has started; those remain gated on this phase's review before Phase 1 begins. All six Phase 0 items above are fully drafted, living documents that will be refined as implementation proceeds.
 
 ## Phase 1 — Boot Manager: Design Validation
 
@@ -42,7 +42,7 @@ This phase's primary output is the documentation set in this repository. The one
 
 **Goal:** define and validate a reproducible build pipeline for a LliureX 23 golden image.
 
-- ✅ Recipe/configuration format (package sets, configuration, branding) — see [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and [config/schema.yaml](config/schema.yaml); a validator implementation is still 💤
+- ✅ Recipe/configuration format (package sets, configuration, branding) — see [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and [config/schema.yaml](config/schema.yaml); a CLI validator is implemented (`bcs validate`, `cli/src/bcs/config/validator.py`)
 - ⏳ Build provenance and versioning scheme, aligned with `VERSION` and `CHANGELOG.md`
 - ⏳ Output format validated against Clonezilla/partclone compatibility
 - ⏳ First reproducible reference image built from a minimal recipe
